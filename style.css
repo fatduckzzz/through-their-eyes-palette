@@ -1,14 +1,17 @@
 /* ============================================================
    配色可及性检查 — 样式
 
-   基础版式为本站新写；.ct-* 部分抽自主站 through-their-eyes，
-   保持两处工具外观一致。
+   主题与主站 through-their-eyes 保持一致（深色 + 流动彩色背景）。
+   这不只是为了观感统一：从主站抽来的 .ct-* 规则引用的是那边的
+   深色变量（--paper 是米白、--mute/--dim 是灰阶），套在浅色主题上
+   会出现白字白底。同一套变量名和取值，抽来的规则才成立。
    ============================================================ */
 
 :root{
-  --ink:#14141a; --ink-soft:#4a4a55; --ink-faint:#7b7b87;
-  --paper:#ffffff; --panel:#f7f7f5; --line:#e2e2de; --line-2:#cfcfc9;
-  --accent:#b45309; --warn:#7a1f1f; --ok:#14532d;
+  --ink:#08080b; --ink-2:#0e0e13; --card:#121219;
+  --paper:#f3efe6; --dim:#ddd8cc; --mute:#b0aaa0; --line:#2a2a34;
+  --achro:#cfcabd; --protan:#ff5b4a; --deutan:#7fd36b; --tritan:#46a6ff; --gold:#ffb24a;
+  --warn:#ffb24a; --ok:#7fd36b; --accent:var(--gold);
   --serif:Georgia,"Songti SC","SimSun",serif;
   --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -16,75 +19,115 @@
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--paper);color:var(--ink);font-family:var(--sans);
-  line-height:1.7;-webkit-font-smoothing:antialiased}
+html,body{min-height:100%}
+body{background:var(--ink);color:var(--paper);font-family:var(--sans);
+  line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .wrap{width:var(--measure);margin:0 auto;padding:0 20px}
 
-.masthead{border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:34px}
+/* ── 流动的彩色背景 ─────────────────────────────────────────
+   与主站同一套：整屏铺开、screen 混合、重模糊。之前把它压进一条
+   270px 高的窄带里，却照搬了为整屏调的 blur(46px)——在那么矮的
+   区域里六团颜色被糊成一片均匀暗色，等于没有。铺满视口才成立。
+
+   下面的面板用不透明底色盖住它。这是判断颜色的工具，色块背后
+   必须是中性底，不能让背景渗上来影响判断。
+   ────────────────────────────────────────────────────────── */
+#ambient{position:fixed;inset:0;z-index:-1;width:100%;height:100%;
+  opacity:.82;filter:blur(46px) saturate(150%);pointer-events:none;mix-blend-mode:screen}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% -10%,transparent 45%,rgba(0,0,0,.72) 100%)}
+
+@media(prefers-reduced-motion:reduce){
+  #ambient{display:none}
+  body{background:
+    radial-gradient(50% 60% at 15% 12%,rgba(255,91,74,.22),transparent 60%),
+    radial-gradient(45% 55% at 82% 20%,rgba(70,166,255,.20),transparent 60%),
+    radial-gradient(55% 60% at 50% 88%,rgba(127,211,107,.16),transparent 60%),
+    var(--ink);}
+}
+
+/* ── 版头 ─────────────────────────────────────────────────── */
+.masthead{border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:38px}
 .masthead .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.brand{font-family:var(--serif);font-size:1.05rem}
+.brand{font-family:var(--serif);font-size:1.05rem;color:var(--paper)}
 
-#langtoggle{display:flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden}
-#langtoggle button{font:inherit;font-size:12px;padding:9px 14px;min-height:40px;
-  border:0;background:transparent;color:var(--ink-faint);cursor:pointer}
-#langtoggle button.on{background:var(--ink);color:var(--paper)}
+#langtoggle{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;
+  background:rgba(8,8,11,.7);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+#langtoggle button{font:inherit;font-size:12px;padding:11px 15px;min-height:44px;
+  border:0;background:transparent;color:var(--mute);cursor:pointer;transition:.2s}
+#langtoggle button.on{background:var(--paper);color:var(--ink)}
 
-.intro{margin-bottom:30px}
-.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;
-  text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
-h1{font-family:var(--serif);font-weight:400;font-size:clamp(1.7rem,4vw,2.5rem);
-  line-height:1.2;margin-bottom:12px}
-h2{font-family:var(--serif);font-weight:400;font-size:1.3rem;margin-bottom:6px}
-.lede{color:var(--ink-soft);max-width:60ch}
-.mono-note{font-size:.82rem;color:var(--ink-faint);line-height:1.65}
+/* ── 页首 ─────────────────────────────────────────────────── */
+.intro{margin-bottom:34px}
+.intro-inner{max-width:64ch}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:12px}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(1.9rem,4.6vw,3rem);
+  line-height:1.14;letter-spacing:-.01em;margin-bottom:14px;
+  text-shadow:0 2px 22px rgba(0,0,0,.5)}
+h2{font-family:var(--serif);font-weight:400;font-size:1.35rem;margin-bottom:6px}
+.lede{color:var(--dim);max-width:62ch}
+.mono-note{font-size:.82rem;color:var(--mute);line-height:1.68}
 
-.panel{border:1px solid var(--line);border-radius:6px;padding:24px;margin-bottom:28px;
-  background:var(--panel)}
+/* ── 面板：不透明卡片，挡住背景 ───────────────────────────── */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:26px;margin-bottom:26px;
+  box-shadow:0 22px 60px rgba(0,0,0,.35)}
 
-.btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:.86rem;
-  padding:12px 20px;min-height:44px;border-radius:4px;cursor:pointer;
-  border:1px solid var(--ink);background:var(--ink);color:var(--paper)}
-.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-2)}
-.btn:focus-visible,#langtoggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  padding:14px 24px;min-height:44px;border-radius:40px;cursor:pointer;
+  border:none;background:var(--paper);color:var(--ink);transition:.25s}
+.btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+.btn.ghost:hover{color:var(--paper);border-color:var(--paper)}
+.btn:focus-visible,#langtoggle button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+html[lang="zh"] .btn{font-family:var(--sans);letter-spacing:.05em;text-transform:none;font-size:.86rem}
 
 .ct-img-head{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;
   flex-wrap:wrap;margin-bottom:10px}
 .ct-img-upload{flex:0 0 auto}
 .privacy{margin-top:14px}
 
-/* ── 分析结果 ───────────────────────────────────────────── */
-
-.an-status{margin:22px 0 16px;padding:13px 16px;border-radius:4px;font-size:.92rem;
-  border-left:4px solid var(--line-2);background:#fff}
-.an-status.is-clean{border-left-color:var(--ok)}
-.an-status.is-warn{border-left-color:var(--warn)}
+/* ── 分析结果 ─────────────────────────────────────────────── */
+.an-status{margin:22px 0 18px;padding:14px 17px;border-radius:10px;font-size:.92rem;
+  border-left:4px solid var(--line);background:rgba(8,8,11,.5)}
+.an-status.is-clean{border-left-color:var(--deutan)}
+.an-status.is-warn{border-left-color:var(--gold)}
 
 .an-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;align-items:start}
 @media(max-width:820px){.an-layout{grid-template-columns:1fr}}
 
 .an-figure{margin:0}
-.an-figure canvas{width:100%;height:auto;border:1px solid var(--line-2);
-  border-radius:4px;background:#fff;display:block}
-.an-figure figcaption{margin-top:9px}
+/* 上传的图放在白底上：那是被检查的对象，背后必须中性 */
+.an-figure canvas{width:100%;height:auto;display:block;border-radius:8px;
+  border:1px solid var(--line);background:#fff}
+.an-figure figcaption{margin-top:10px}
 
-.an-findings{display:flex;flex-direction:column;gap:16px}
-.an-row{border:1px solid var(--line);border-radius:4px;padding:14px 16px;background:#fff}
-.an-row-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:7px}
-.an-row-title{font-family:var(--mono);font-size:.82rem}
-.an-row-detail{font-size:.88rem;color:var(--ink-soft)}
-.an-row-fix{display:flex;align-items:center;gap:9px;margin-top:9px;padding-top:9px;
-  border-top:1px dashed var(--line);font-size:.88rem}
-.an-row-fix.is-nofix{color:var(--warn)}
+.an-findings{display:flex;flex-direction:column;gap:14px}
+.an-row{border:1px solid var(--line);border-radius:10px;padding:15px 17px;background:rgba(8,8,11,.45)}
+.an-row-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
+.an-row-title{font-family:var(--mono);font-size:.8rem;color:var(--dim)}
+.an-row-detail{font-size:.88rem;color:var(--dim)}
+.an-row-fix{display:flex;align-items:center;gap:9px;margin-top:10px;padding-top:10px;
+  border-top:1px dashed var(--line);font-size:.88rem;color:var(--dim)}
+.an-row-fix.is-nofix{color:var(--gold)}
 
 .an-badge{display:inline-flex;align-items:center;justify-content:center;
-  width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--paper);
+  width:22px;height:22px;border-radius:50%;background:var(--paper);color:var(--ink);
   font-family:var(--mono);font-size:12px;font-weight:700;flex:0 0 auto}
-.an-sw{width:20px;height:20px;border-radius:3px;border:1px solid rgba(0,0,0,.28);flex:0 0 auto}
+.an-sw{width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,.3);flex:0 0 auto}
+.an-sev{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;padding:4px 10px;
+  border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.an-sev.is-high{color:var(--protan)}
+.an-sev.is-moderate{color:var(--gold)}
+.an-caveat{margin-top:2px;padding-top:12px;border-top:1px solid var(--line)}
+.an-caveat + .an-caveat{margin-top:8px;padding-top:0;border-top:0}
 
-.an-caveat{margin-top:4px;padding-top:12px;border-top:1px solid var(--line)}
+.colophon{border-top:1px solid var(--line);padding:26px 0 64px;color:var(--mute);font-size:.85rem}
+.colophon a{color:var(--dim)}
+.colophon a:hover{color:var(--paper)}
 
-.colophon{border-top:1px solid var(--line);padding:24px 0 60px;color:var(--ink-faint);font-size:.85rem}
-.colophon a{color:inherit}
+@media(hover:none){.btn:hover,.ct-preset:hover{transform:none}}
 
 /* ============================================================
    以下抽自主站 style.css
@@ -144,46 +187,3 @@ html[lang="zh"] #ctool .ct-img-panel-lbl{font-family:var(--sans);letter-spacing:
   .ct-preset:hover,.ct-cell:hover{transform:none}
 }
 
-/* ============================================================
-   页首的流动彩色背景（ambient.js）
-
-   跟主站同一套视觉，但**只铺在页首**。下面的配色表和分析结果
-   保持中性底色——这是个判断颜色的工具，背景一旦有颜色，就会干扰
-   你正在评估的那些颜色。同理，画布上叠了一层暗色渐变收住底部，
-   让文字在任何一帧上都读得清。
-   ============================================================ */
-
-.intro{
-  position:relative;isolation:isolate;overflow:hidden;
-  margin:-34px -20px 34px;padding:64px 20px 54px;
-  background:#0c0c11;color:#f3efe6;
-}
-.intro-inner{position:relative;z-index:2;width:var(--measure);margin:0 auto;padding:0 20px}
-.intro .kicker{color:rgba(243,239,230,.62)}
-.intro h1{color:#f7f4ec;text-shadow:0 2px 20px rgba(0,0,0,.5)}
-.intro .lede{color:rgba(243,239,230,.86)}
-
-#ambient{
-  position:absolute;inset:0;z-index:0;width:100%;height:100%;
-  opacity:.82;filter:blur(46px) saturate(150%);
-  mix-blend-mode:screen;pointer-events:none;
-}
-/* 收边：四周压暗，文字不会撞上某一团高亮 */
-.intro::after{
-  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:radial-gradient(120% 100% at 50% 30%,transparent 40%,rgba(8,8,12,.72) 100%);
-}
-
-@media(prefers-reduced-motion:reduce){
-  /* 不跑动画时给一层静态渐变，免得页首变成一块纯黑 */
-  #ambient{display:none}
-  .intro{background:
-    radial-gradient(60% 80% at 18% 22%,rgba(255,91,74,.30),transparent 60%),
-    radial-gradient(55% 75% at 78% 30%,rgba(70,166,255,.28),transparent 60%),
-    radial-gradient(60% 80% at 50% 90%,rgba(127,211,107,.24),transparent 60%),
-    #0c0c11;}
-}
-
-@media(max-width:620px){
-  .intro{padding:44px 20px 38px}
-}
