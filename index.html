@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>配色可及性检查 · Colour Accessibility Checker</title>
+<meta name="description" content="检查配色与设计图对色觉障碍者是否可及：模拟三种常见色觉、定位塌陷的颜色对、给出修改建议。全部在浏览器本地完成。">
+<!-- 字体自托管，中文走系统栈：Google Fonts 在中国大陆不可达 -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <span class="brand">配色可及性检查</span>
+    <div id="langtoggle">
+      <button data-lang="zh" class="on">中文</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="ctool">
+
+  <div class="intro">
+    <div class="kicker" data-i="ct.kicker"></div>
+    <h1 data-i="ct.title"></h1>
+    <p class="lede" data-i="ct.lede"></p>
+  </div>
+
+  <!-- ── 配色表 ───────────────────────────────────────────── -->
+  <section class="panel">
+    <div class="ct-head">
+      <span class="ct-col-lbl ct-true" data-i="ct.true"></span>
+      <span class="ct-col-lbl" data-i="ct.protan"></span>
+      <span class="ct-col-lbl" data-i="ct.deutan"></span>
+      <span class="ct-col-lbl" data-i="ct.tritan"></span>
+    </div>
+    <div id="ctRows"></div>
+    <div id="ctCheck" class="ct-check"></div>
+
+    <div class="ct-actions">
+      <button class="btn ghost" id="ctAdd" data-i="ct.add"></button>
+      <button class="btn ghost" id="ctReset" data-i="ct.reset"></button>
+      <button class="btn ghost" id="ctExport" data-i="ct.export"></button>
+    </div>
+
+    <div class="ct-presets">
+      <span class="ct-presets-lbl" data-i="ct.presets"></span>
+      <button class="ct-preset" data-pal="#648FFF,#785EF0,#DC267F,#FE6100,#FFB000">IBM</button>
+      <button class="ct-preset" data-pal="#000000,#E69F00,#56B4E9,#009E73,#F0E442,#0072B2,#D55E00,#CC79A7">Wong</button>
+      <button class="ct-preset" data-pal="#332288,#117733,#44AA99,#88CCEE,#DDCC77,#CC6677,#AA4499,#882255">Tol</button>
+      <button class="ct-preset" data-pal="#E41A1C,#4DAF4A">Red / Green</button>
+    </div>
+
+    <p class="mono-note" data-i="ct.note"></p>
+  </section>
+
+  <!-- ── 图片检查 ─────────────────────────────────────────── -->
+  <section class="panel ct-img">
+    <div class="ct-img-head">
+      <div>
+        <h2 data-i="an.title"></h2>
+        <p class="mono-note" data-i="an.lede"></p>
+      </div>
+      <label class="btn ct-img-upload">
+        <span data-i="ct.img.upload"></span>
+        <input type="file" id="ctImgInput" accept="image/*" hidden>
+      </label>
+    </div>
+
+    <p class="mono-note privacy" data-i="ct.img.note"></p>
+
+    <!-- 分析结果：标注图 + 问题清单 -->
+    <div id="ctAnalysis" hidden>
+      <div class="an-status" id="anStatus" aria-live="polite"></div>
+      <div class="an-layout">
+        <figure class="an-figure">
+          <canvas id="anCanvas"></canvas>
+          <figcaption class="mono-note" data-i="an.figcaption"></figcaption>
+        </figure>
+        <div class="an-findings" id="anFindings"></div>
+      </div>
+    </div>
+
+    <!-- 四宫格模拟（原有功能） -->
+    <div id="ctImgGrid" class="ct-img-grid" hidden></div>
+  </section>
+
+  <footer class="colophon">
+    <p data-i="foot.about"></p>
+    <p class="mono-note">
+      <a href="https://davidmathlogic.com/colorblind/" target="_blank" rel="noopener">davidmathlogic.com/colorblind</a> ·
+      <a href="https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html" target="_blank" rel="noopener">WCAG 2.2 · 1.4.1 Use of Color</a>
+    </p>
+  </footer>
+
+</main>
+
+<script src="i18n.js"></script>
+<script src="ctool.js"></script>
+<script src="analyse.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

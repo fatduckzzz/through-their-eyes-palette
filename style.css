@@ -1,0 +1,155 @@
+/* ============================================================
+   配色可及性检查 — 样式
+
+   基础版式为本站新写；.ct-* 部分抽自主站 through-their-eyes，
+   保持两处工具外观一致。
+   ============================================================ */
+
+:root{
+  --ink:#14141a; --ink-soft:#4a4a55; --ink-faint:#7b7b87;
+  --paper:#ffffff; --panel:#f7f7f5; --line:#e2e2de; --line-2:#cfcfc9;
+  --accent:#b45309; --warn:#7a1f1f; --ok:#14532d;
+  --serif:Georgia,"Songti SC","SimSun",serif;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --measure:min(1040px,100%);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{width:var(--measure);margin:0 auto;padding:0 20px}
+
+.masthead{border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:34px}
+.masthead .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-family:var(--serif);font-size:1.05rem}
+
+#langtoggle{display:flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden}
+#langtoggle button{font:inherit;font-size:12px;padding:9px 14px;min-height:40px;
+  border:0;background:transparent;color:var(--ink-faint);cursor:pointer}
+#langtoggle button.on{background:var(--ink);color:var(--paper)}
+
+.intro{margin-bottom:30px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(1.7rem,4vw,2.5rem);
+  line-height:1.2;margin-bottom:12px}
+h2{font-family:var(--serif);font-weight:400;font-size:1.3rem;margin-bottom:6px}
+.lede{color:var(--ink-soft);max-width:60ch}
+.mono-note{font-size:.82rem;color:var(--ink-faint);line-height:1.65}
+
+.panel{border:1px solid var(--line);border-radius:6px;padding:24px;margin-bottom:28px;
+  background:var(--panel)}
+
+.btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:.86rem;
+  padding:12px 20px;min-height:44px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--ink);color:var(--paper)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-2)}
+.btn:focus-visible,#langtoggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.ct-img-head{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;margin-bottom:10px}
+.ct-img-upload{flex:0 0 auto}
+.privacy{margin-top:14px}
+
+/* ── 分析结果 ───────────────────────────────────────────── */
+
+.an-status{margin:22px 0 16px;padding:13px 16px;border-radius:4px;font-size:.92rem;
+  border-left:4px solid var(--line-2);background:#fff}
+.an-status.is-clean{border-left-color:var(--ok)}
+.an-status.is-warn{border-left-color:var(--warn)}
+
+.an-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;align-items:start}
+@media(max-width:820px){.an-layout{grid-template-columns:1fr}}
+
+.an-figure{margin:0}
+.an-figure canvas{width:100%;height:auto;border:1px solid var(--line-2);
+  border-radius:4px;background:#fff;display:block}
+.an-figure figcaption{margin-top:9px}
+
+.an-findings{display:flex;flex-direction:column;gap:16px}
+.an-row{border:1px solid var(--line);border-radius:4px;padding:14px 16px;background:#fff}
+.an-row-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:7px}
+.an-row-title{font-family:var(--mono);font-size:.82rem}
+.an-row-detail{font-size:.88rem;color:var(--ink-soft)}
+.an-row-fix{display:flex;align-items:center;gap:9px;margin-top:9px;padding-top:9px;
+  border-top:1px dashed var(--line);font-size:.88rem}
+.an-row-fix.is-nofix{color:var(--warn)}
+
+.an-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--paper);
+  font-family:var(--mono);font-size:12px;font-weight:700;flex:0 0 auto}
+.an-sw{width:20px;height:20px;border-radius:3px;border:1px solid rgba(0,0,0,.28);flex:0 0 auto}
+
+.an-caveat{margin-top:4px;padding-top:12px;border-top:1px solid var(--line)}
+
+.colophon{border-top:1px solid var(--line);padding:24px 0 60px;color:var(--ink-faint);font-size:.85rem}
+.colophon a{color:inherit}
+
+/* ============================================================
+   以下抽自主站 style.css（.ct-* / #ctool 相关规则）
+   ============================================================ */
+
+.btn,.btn.ghost,.pill,.replies button,.likert button,.chips button,.switch,.ct-preset,input[type=range],.field{text-shadow:none}
+}
+
+/* ---------- colour-vision palette simulator ---------- */
+#ctool .ct-head{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;margin-top:30px;padding:0 4px}
+#ctool .ct-col-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);text-align:center}
+html[lang="zh"] #ctool .ct-col-lbl{font-family:var(--sans);letter-spacing:.04em}
+#ctool .ct-col-lbl.ct-true{color:var(--paper)}
+#ctool .ct-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;margin-top:10px}
+#ctool .ct-cell{height:64px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+#ctool .ct-pick{position:relative;cursor:pointer;display:flex;align-items:flex-end;justify-content:space-between;padding:8px;overflow:hidden}
+#ctool .ct-pick input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0}
+#ctool .ct-code{font-family:var(--mono);font-size:10px;color:#fff;mix-blend-mode:difference;pointer-events:none;letter-spacing:.04em}
+#ctool .ct-del{position:relative;z-index:2;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:15px;line-height:1;cursor:pointer}
+#ctool .ct-del:hover{background:rgba(0,0,0,.7)}
+#ctool .ct-actions{display:flex;gap:12px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+#ctool .ct-presets{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:26px;flex-wrap:wrap}
+#ctool .ct-presets-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+html[lang="zh"] #ctool .ct-presets-lbl{font-family:var(--sans);letter-spacing:.04em}
+#ctool .ct-preset{font-family:var(--mono);font-size:12px;padding:7px 14px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;transition:.2s}
+#ctool .ct-preset:hover{color:var(--paper);border-color:var(--paper)}
+#ctool .ct-check{margin-top:24px}
+#ctool .ct-check-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin-bottom:10px}
+html[lang="zh"] #ctool .ct-check-title{font-family:var(--sans);letter-spacing:.04em}
+#ctool .ct-check-ok{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--deutan);background:rgba(127,211,107,.08);border:1px solid rgba(127,211,107,.5);border-radius:999px;padding:7px 13px}
+#ctool .ct-check-ok::before{content:"\2713";font-weight:700}
+html[lang="zh"] #ctool .ct-check-ok{font-family:var(--sans)}
+#ctool .ct-warn{border:1px solid rgba(255,178,74,.4);background:rgba(255,178,74,.06);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+#ctool .ct-warn-head{display:flex;align-items:center;gap:8px;font-size:.83rem;color:var(--dim);flex-wrap:wrap}
+#ctool .ct-warn .sw{width:16px;height:16px;border-radius:4px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);flex:0 0 auto}
+#ctool .ct-warn-fix{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:.83rem;color:var(--dim)}
+#ctool .ct-fixbtn{font-family:var(--mono);font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer;transition:.2s;margin-left:4px}
+#ctool .ct-fixbtn:hover{background:var(--gold);color:#000}
+#ctool .ct-img{margin-top:32px;padding-top:24px;border-top:1px solid var(--line)}
+#ctool .ct-img-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#ctool .ct-img-upload{cursor:pointer;display:inline-flex}
+#ctool .ct-img-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}
+#ctool .ct-img-panel{background:#101018;border-radius:12px;border:1px solid var(--line);overflow:hidden}
+#ctool .ct-img-panel canvas{width:100%;height:auto;display:block}
+#ctool .ct-img-panel-lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+html[lang="zh"] #ctool .ct-img-panel-lbl{font-family:var(--sans);letter-spacing:.04em}
+#ctool .ct-img-dl{color:var(--gold);text-decoration:none}
+#ctool .ct-img-dl:hover{text-decoration:underline}
+@media(min-width:760px){
+  #ctool .ct-img-grid{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:600px){
+  #ctool .ct-head,#ctool .ct-row{grid-template-columns:1.3fr 1fr 1fr 1fr;gap:6px}
+#ctool .ct-cell{height:50px}
+#ctool .ct-code{display:none}
+}
+
+/* Decorative hover states only where a real pointer exists. On touch screens a
+   :hover rule sticks after the tap, leaving elements visually "stuck". */
+@media(hover:none){
+  .btn:hover,.choice:hover,.vcard:hover,.brow:hover,.qnav-btn:hover,
+  .ct-preset:hover,.ct-cell:hover{transform:none}
+
+.an-sev{font-size:11px;letter-spacing:.04em;padding:3px 9px;border-radius:999px;
+  border:1px solid currentColor;white-space:nowrap}
+.an-sev.is-high{color:var(--warn)}
+.an-sev.is-moderate{color:var(--accent)}
+.an-caveat + .an-caveat{margin-top:8px;padding-top:0;border-top:0}
