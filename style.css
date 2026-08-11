@@ -87,13 +87,11 @@ h2{font-family:var(--serif);font-weight:400;font-size:1.3rem;margin-bottom:6px}
 .colophon a{color:inherit}
 
 /* ============================================================
-   以下抽自主站 style.css（.ct-* / #ctool 相关规则）
+   以下抽自主站 style.css
+   （按 @media 结构完整抽取，避免孤立右括号破坏后续嵌套）
    ============================================================ */
 
 .btn,.btn.ghost,.pill,.replies button,.likert button,.chips button,.switch,.ct-preset,input[type=range],.field{text-shadow:none}
-}
-
-/* ---------- colour-vision palette simulator ---------- */
 #ctool .ct-head{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;margin-top:30px;padding:0 4px}
 #ctool .ct-col-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);text-align:center}
 html[lang="zh"] #ctool .ct-col-lbl{font-family:var(--sans);letter-spacing:.04em}
@@ -138,18 +136,54 @@ html[lang="zh"] #ctool .ct-img-panel-lbl{font-family:var(--sans);letter-spacing:
 }
 @media(max-width:600px){
   #ctool .ct-head,#ctool .ct-row{grid-template-columns:1.3fr 1fr 1fr 1fr;gap:6px}
-#ctool .ct-cell{height:50px}
-#ctool .ct-code{display:none}
+  #ctool .ct-cell{height:50px}
+  #ctool .ct-code{display:none}
 }
-
-/* Decorative hover states only where a real pointer exists. On touch screens a
-   :hover rule sticks after the tap, leaving elements visually "stuck". */
 @media(hover:none){
   .btn:hover,.choice:hover,.vcard:hover,.brow:hover,.qnav-btn:hover,
   .ct-preset:hover,.ct-cell:hover{transform:none}
+}
 
-.an-sev{font-size:11px;letter-spacing:.04em;padding:3px 9px;border-radius:999px;
-  border:1px solid currentColor;white-space:nowrap}
-.an-sev.is-high{color:var(--warn)}
-.an-sev.is-moderate{color:var(--accent)}
-.an-caveat + .an-caveat{margin-top:8px;padding-top:0;border-top:0}
+/* ============================================================
+   页首的流动彩色背景（ambient.js）
+
+   跟主站同一套视觉，但**只铺在页首**。下面的配色表和分析结果
+   保持中性底色——这是个判断颜色的工具，背景一旦有颜色，就会干扰
+   你正在评估的那些颜色。同理，画布上叠了一层暗色渐变收住底部，
+   让文字在任何一帧上都读得清。
+   ============================================================ */
+
+.intro{
+  position:relative;isolation:isolate;overflow:hidden;
+  margin:-34px -20px 34px;padding:64px 20px 54px;
+  background:#0c0c11;color:#f3efe6;
+}
+.intro-inner{position:relative;z-index:2;width:var(--measure);margin:0 auto;padding:0 20px}
+.intro .kicker{color:rgba(243,239,230,.62)}
+.intro h1{color:#f7f4ec;text-shadow:0 2px 20px rgba(0,0,0,.5)}
+.intro .lede{color:rgba(243,239,230,.86)}
+
+#ambient{
+  position:absolute;inset:0;z-index:0;width:100%;height:100%;
+  opacity:.82;filter:blur(46px) saturate(150%);
+  mix-blend-mode:screen;pointer-events:none;
+}
+/* 收边：四周压暗，文字不会撞上某一团高亮 */
+.intro::after{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 100% at 50% 30%,transparent 40%,rgba(8,8,12,.72) 100%);
+}
+
+@media(prefers-reduced-motion:reduce){
+  /* 不跑动画时给一层静态渐变，免得页首变成一块纯黑 */
+  #ambient{display:none}
+  .intro{background:
+    radial-gradient(60% 80% at 18% 22%,rgba(255,91,74,.30),transparent 60%),
+    radial-gradient(55% 75% at 78% 30%,rgba(70,166,255,.28),transparent 60%),
+    radial-gradient(60% 80% at 50% 90%,rgba(127,211,107,.24),transparent 60%),
+    #0c0c11;}
+}
+
+@media(max-width:620px){
+  .intro{padding:44px 20px 38px}
+}
