@@ -11,19 +11,36 @@
    **哪两块颜色**在**哪种色觉**下会塌到一起、**它们在图的哪个位置
    贴在一起**，以及可以怎么改。
 
-   判据（三个条件同时成立才算一处问题）
+   判据
    ------------------------------------------------------------
-   1. 原图里这两个颜色本来靠色相区分    色度差 > ORIGINAL_CHROMA_MIN
-   2. 模拟之后色相塌了                  色度差 < SIM_CHROMA_MAX
-   3. 它们在图上真的挨着                相邻像素对数 > CONTACT_MIN
+   前提：原图里这两个颜色本来就靠色相区分（色度差 > ORIGINAL_CHROMA_MIN），
+   且两者都在做分类编码（有明确彩度，底色文字灰阶不算）。
 
-   第 3 条是关键。一张图左上角的红和右下角的绿即使模拟后同色，
-   也不构成阅读障碍——没人会把它们放在一起比较。只有当两块颜色
-   实际接壤（图例色块相邻、折线交叠、饼图扇区相接）时，塌陷才
-   真的伤害理解。跳过这一步会报出大量无关的告警。
+   在此之上，模拟后满足下面任一条即算一处问题：
+     A. 色相塌了      色度差 < SIM_CHROMA_MAX
+     B. 整体太近了    总 ΔE < SIM_DE_MAX，且比原来损失了 MIN_DE_LOSS 以上
 
-   量的是 CIELAB 的 a*b* 平面距离（色度差），不是总 ΔE——色觉障碍
-   塌掉的正是这条轴，明度基本不受影响，用总 ΔE 会漏报。
+   两条都要。只看 A 会漏：#D72D2D 与 #3CA03C 在绿色盲下变成 #878716 和
+   #898942，色相完全一样、只是一个更灰，色度差 17 反而过不了 A 的阈值，
+   最经典的红绿撞色就漏了。只看 B 也会漏：色觉障碍塌掉的是 a*b* 平面，
+   明度基本不受影响，总 ΔE 会低估损失。
+
+   两条都给明度留出路（simLight < SIM_LIGHT_SAFE）。明度是三种色觉障碍
+   都保得住的线索，够大的明度差本身就是一条完整的编码——不留这条出路，
+   每个"深色对浅色"的组合都会被报成问题。
+
+   注意这里**没有**"两块颜色必须在图上接壤"这一条。曾经有过，是错的：
+   柱状图的各系列本来就分行分列摆着、彼此不挨边，读者靠图例把它们联系
+   起来——恰恰是最常见的排布，却被那条规则整个跳过。接壤与否降级成了
+   元数据，只用来决定标记画在哪。
+
+   验证
+   ------------------------------------------------------------
+   拿已知安全和已知有问题的配色做过回归：红/绿、红/棕、绿/棕、蓝/紫、
+   粉/浅绿全部报出；灰阶、蓝色单色阶、蓝/橙、红/黑全部零告警；Tableau 10
+   报出 13 处（Tableau 自己另出一套 Color Blind 配色，正是因为默认这套
+   不安全）；Okabe-Ito 的红绿轴干净，只在蓝黄色盲下有塌陷——与该配色
+   "只保证 protan/deutan"的设计声明一致。
 
    一对颜色只出一条结果，受影响的色觉类型合并进去。红绿两类色觉
    障碍高度重叠，分开报同一对颜色只会制造噪音。
@@ -47,24 +64,56 @@ var CVDAnalyse = (function () {
                                           不同屏幕亮度下仍会认错
      两级都报，但在文案里说清楚区别，让设计师自己判断要不要改。 */
   var CONFIG = {
-    K: 10,                 // 提取多少个主色
-    KMEANS_ITERS: 8,
-    SAMPLE_STRIDE: 3,      // 聚类时的像素抽样步长（提速用）
+    MAX_COLOURS: 24,       // 最多提取多少个主色
+    COUNT_SLOTS: 14,       // 其中按"占比大"分配的名额，剩下的留给高彩度小元素
+    BIN_BITS: 3,           // 直方图每通道右移位数（3 → 32 级，共 32768 格）
+    MIN_BIN_SHARE: 0.0004, // 一格少于总像素的 0.04% 视为噪点
+    MIN_SEP: 12,           // 两个主色之间至少要差这么多 ΔE，否则算同一个
+    ASSIGN_MAX: 20,        // 像素离最近主色超过这个 ΔE 就不贴标签（多半是抗锯齿混色）
     ORIGINAL_CHROMA_MIN: 25, // 原图里这两色的色度差要够大，才说明设计本来指望靠颜色区分
     SIM_CHROMA_MAX: 13,    // 模拟后色度差小于这个值 → 色相塌陷
-    HIGH_CHROMA_MAX: 8,    // 判 severity=high 的色度上限
-    HIGH_LIGHT_MAX: 10,    // 判 severity=high 的明度上限（两者都要满足）
-    /* 模拟后明度差达到这个值就不报了。
+    /* 模拟后总色差小于这个值 → 不论色相有没有"塌"，两块颜色就是太近了。
 
-       色相塌陷本身不等于有问题——白底和青色柱在绿色盲下色相差会从
-       35 掉到 2，但两者的明度差有 47，谁都分得开。那一对**本来就不是
-       靠色相区分的**，损失掉的东西没人在用。不设这条线就会把每一个
-       "深色对浅色"的组合都报成问题，工具随即变成噪音。 */
-    SIM_LIGHT_SAFE: 30,
+       只测色度塌陷会漏掉一整类。教科书那对 #D72D2D / #3CA03C 在绿色盲
+       下变成 #878716 和 #898942：明度差 1.1，色相完全一样，只剩一个比
+       另一个灰一点——色度差 17.1，超过上面那条 13 的线，于是被判成
+       "色相没塌"，最经典的红绿撞色就这么漏掉了绿色盲这一项。
+
+       色度塌陷说的是"损失的是什么"，总 ΔE 说的是"剩下的够不够用"。
+       两条都要。文件开头说过总 ΔE 会低估损失——那是对的，但那句话讲的
+       是**前后对比**；判断**模拟之后还分不分得开**，总 ΔE 正是该用的量。 */
+    SIM_DE_MAX: 22,
+    HIGH_DE_MAX: 13,       // 模拟后总色差低于这个值 → 基本无法分辨
+    MIN_DE_LOSS: 12,       // 前后总色差至少损失这么多，才算是色觉障碍造成的
+    /* 模拟后明度差达到这个值就不报了——明度是三种色觉障碍都保得住的
+       线索，够大的明度差本身就是一条完整的编码。
+
+       色相塌陷本身不等于有问题：白底和青色柱在绿色盲下色相差会从 35
+       掉到 2，但两者的明度差有 47，谁都分得开。那一对**本来就不是靠
+       色相区分的**，损失掉的东西没人在用。不设这条线，每一个"深色对
+       浅色"的组合都会被报成问题，工具随即变成噪音。
+
+       18 这个数是量出来的，不是拍的。拿一组已知安全和已知有问题的配色
+       跑下来，两边在这条轴上分得很干净：
+
+         Viridis 相邻档（公认色觉安全）  ΔL 17.2 / 18.6 / 18.6
+         红/绿、蓝/紫、粉/浅绿、红/棕    ΔL  1.1 /  0.9 /  3.2 / 11.7
+
+       原来这条线在 30，于是 Viridis 被报出三处——一个设计师用了公认
+       安全的色阶还挨三条告警，就不会再信这个工具了。 */
+    SIM_LIGHT_SAFE: 18,
     SIM_LIGHT_TARGET: 28,  // 建议改法要达到的模拟后明度差
     CATEGORICAL_MAX: 5,    // 超过这么多主色在做分类编码，颜色本身就超载了
     CONTACT_MIN: 60,       // 相邻像素对少于这个数视为"没挨着"
-    MIN_SHARE: 0.004       // 占比低于 0.4% 的主色忽略（多半是抗锯齿产生的过渡色）
+    /* 占比低于这个数的主色忽略。
+
+       这条线得设得很低。一张 800×500 的图上，一个 9px 半径的图例圆点
+       只占 0.064%；按老的 0.4%（甚至 0.12%）来卡，图例整排都会被当成
+       噪点扔掉——而图例恰恰是"靠颜色区分类别"最集中的地方，是最该
+       检查的部分。放心放低的前提是上面那道直方图门槛：一个颜色要成为
+       候选，得在**单个直方图格子里**占到 0.04%，抗锯齿的混色摊得太开，
+       过不了这一关。 */
+    MIN_SHARE: 0.0004
   };
 
   function chromaDelta(a, b) {
@@ -122,85 +171,105 @@ var CVDAnalyse = (function () {
     ];
   }
 
-  /* ---------- 主色提取（k-means） ---------- */
+  /* ---------- 主色提取（直方图峰值） ----------
 
-  function quantize(data, w, h, k) {
-    var px = [], i;
+     这里原来跑的是 k-means，那是错的，而且错得很安静。
 
-    /* 抽样聚类，全图赋标签。480px 上限的图抽样后约 25k 点，够稳也够快。 */
-    for (i = 0; i < data.length; i += 4 * CONFIG.SAMPLE_STRIDE) {
+     k-means 找的是像素的**平均值**。可是图表不是照片：一根 1.5px 的
+     折线、一个 8px 的图例点，真正是纯色的像素只有中间那一两行，外面
+     一圈全是它和底色的抗锯齿混合；线本身再带点透明度的话，纯色像素
+     就一个都没有。数量上混色远多于纯色，均值于是被拖到两者中间。
+     实测：一张深蓝底、十种颜色的桑基图，k-means 提出来的是
+     #706449、#82908B、#A18A56——十个设计色一个都没对上，最后报出
+     零处冲突。工具看上去在正常工作，只是什么都查不出来。
+
+     换个思路。图表是合成图像，设计色会以**同一个精确色值重复成千
+     上万次**，在颜色直方图上是尖峰；抗锯齿的混色则沿着两个峰之间
+     的连线摊开，每一格都很浅。所以不该求平均，该找峰：
+
+       1. 5 位精度的直方图（32 级/通道），统计每格的像素数和均色；
+       2. 低于总量 0.04% 的格子丢掉——那是抗锯齿的尾巴；
+       3. 按数量从多到少贪心取，新色与已取的色必须差 MIN_SEP 以上
+          （ΔE），避免十个名额被底色的渐变吃光；
+       4. 留几个名额按**彩度**再取一轮。占比大不等于重要：占 70% 的
+          底色和占 0.4% 的红色警示点，后者才是要查的。只按数量排，
+          小而饱和的元素永远进不来。
+
+     贴标签时也加一条：像素离最近的主色超过 ASSIGN_MAX 就不贴。混色
+     像素不该算进任何一个颜色的面积，也不该让两块颜色显得"接壤"。 */
+
+  function extract(data, w, h) {
+    var SH = CONFIG.BIN_BITS, N = 256 >> SH, n3 = N * N * N;
+    var cnt = new Int32Array(n3);
+    var sr = new Float64Array(n3), sg = new Float64Array(n3), sb = new Float64Array(n3);
+    var total = 0, i, k, j;
+
+    for (i = 0; i < data.length; i += 4) {
       if (data[i + 3] < 128) continue;                 // 忽略透明像素
-      px.push([data[i], data[i + 1], data[i + 2]]);
+      var r = data[i], g = data[i + 1], b = data[i + 2];
+      k = (((r >> SH) * N) + (g >> SH)) * N + (b >> SH);
+      cnt[k]++; sr[k] += r; sg[k] += g; sb[k] += b;
+      total++;
     }
-    if (px.length < k) return null;
+    if (total < 64) return null;
 
-    /* 最远点初始化（farthest-point / k-means++ 的确定性版本）。
-
-       别按像素顺序取初始中心：图像是从上到下扫描的，一张上半部
-       留白的图表会让前几个中心全落在白色上，聚类随即塌成两三类，
-       真正要检查的图例配色反而被合并掉。最远点法保证初始中心在
-       色彩空间里铺开，且不依赖随机种子——同一张图每次结果一致，
-       这对"给设计师看的报告"是必要的。 */
-    var cent = [px[0].slice()];
-    var far = new Float64Array(px.length);
-    for (i = 0; i < px.length; i++) far[i] = Infinity;
-
-    while (cent.length < k) {
-      var last = cent[cent.length - 1];
-      var pick = 0, pickD = -1;
-      for (i = 0; i < px.length; i++) {
-        var dr0 = px[i][0] - last[0], dg0 = px[i][1] - last[1], db0 = px[i][2] - last[2];
-        var d0 = dr0 * dr0 + dg0 * dg0 + db0 * db0;
-        if (d0 < far[i]) far[i] = d0;
-        if (far[i] > pickD) { pickD = far[i]; pick = i; }
-      }
-      if (pickD <= 0) break;                  // 图里的颜色比 k 还少
-      cent.push(px[pick].slice());
+    var floorN = Math.max(6, Math.round(total * CONFIG.MIN_BIN_SHARE));
+    var bins = [];
+    for (k = 0; k < n3; k++) {
+      if (cnt[k] < floorN) continue;
+      var rgb = [Math.round(sr[k] / cnt[k]), Math.round(sg[k] / cnt[k]), Math.round(sb[k] / cnt[k])];
+      var lab = rgb2lab(rgb[0], rgb[1], rgb[2]);
+      bins.push({ rgb: rgb, lab: lab, n: cnt[k],
+                  chroma: Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]) });
     }
-    k = cent.length;
+    if (!bins.length) return null;
 
-    var assign = new Int32Array(px.length);
-    for (var it = 0; it < CONFIG.KMEANS_ITERS; it++) {
-      for (i = 0; i < px.length; i++) {
-        var best = 0, bd = Infinity;
-        for (var c = 0; c < k; c++) {
-          var dr = px[i][0] - cent[c][0], dg = px[i][1] - cent[c][1], db = px[i][2] - cent[c][2];
-          var d = dr * dr + dg * dg + db * db;
-          if (d < bd) { bd = d; best = c; }
-        }
-        assign[i] = best;
+    var chosen = [];
+    function tryAdd(bn) {
+      if (chosen.length >= CONFIG.MAX_COLOURS) return;
+      for (var q = 0; q < chosen.length; q++) {
+        if (deltaE(bn.lab, chosen[q].lab) < CONFIG.MIN_SEP) return;
       }
-      var sum = [], cnt = new Int32Array(k);
-      for (c = 0; c < k; c++) sum.push([0, 0, 0]);
-      for (i = 0; i < px.length; i++) {
-        var a = assign[i];
-        sum[a][0] += px[i][0]; sum[a][1] += px[i][1]; sum[a][2] += px[i][2];
-        cnt[a]++;
+      chosen.push(bn);
+    }
+
+    var byCount = bins.slice().sort(function (p, q) { return q.n - p.n; });
+    for (i = 0; i < byCount.length && chosen.length < CONFIG.COUNT_SLOTS; i++) tryAdd(byCount[i]);
+    var byChroma = bins.slice().sort(function (p, q) { return q.chroma - p.chroma; });
+    for (i = 0; i < byChroma.length && chosen.length < CONFIG.MAX_COLOURS; i++) tryAdd(byChroma[i]);
+    for (i = 0; i < byCount.length && chosen.length < CONFIG.MAX_COLOURS; i++) tryAdd(byCount[i]);
+
+    var kn = chosen.length;
+    var cent = chosen.map(function (o) { return o.rgb; });
+
+    /* 每格算一次归属，像素只查表。既比逐像素比对快，也让"混色不贴
+       标签"这条规则落在格子上，前后一致。 */
+    var binLabel = new Int32Array(n3);
+    for (k = 0; k < n3; k++) {
+      if (!cnt[k]) { binLabel[k] = -1; continue; }
+      var m = rgb2lab(Math.round(sr[k] / cnt[k]), Math.round(sg[k] / cnt[k]), Math.round(sb[k] / cnt[k]));
+      var best = -1, bd = Infinity;
+      for (j = 0; j < kn; j++) {
+        var d = deltaE(m, chosen[j].lab);
+        if (d < bd) { bd = d; best = j; }
       }
-      for (c = 0; c < k; c++) {
-        if (!cnt[c]) continue;
-        cent[c] = [Math.round(sum[c][0] / cnt[c]), Math.round(sum[c][1] / cnt[c]), Math.round(sum[c][2] / cnt[c])];
-      }
+      binLabel[k] = bd <= CONFIG.ASSIGN_MAX ? best : -1;
     }
 
     /* 给全图每个像素贴标签，顺便记下每个主色的外接框——
        后面判断这块颜色是线、是面还是散点要用。 */
     var labels = new Int32Array(w * h);
-    var share = new Int32Array(k);
+    var share = new Int32Array(kn);
     var bounds = [];
-    var sumX = new Float64Array(k), sumY = new Float64Array(k);
-    for (c = 0; c < k; c++) bounds.push({ x0: w, y0: h, x1: 0, y1: 0 });
+    var sumX = new Float64Array(kn), sumY = new Float64Array(kn);
+    for (j = 0; j < kn; j++) bounds.push({ x0: w, y0: h, x1: 0, y1: 0 });
 
     for (i = 0; i < w * h; i++) {
       var o = i * 4;
       if (data[o + 3] < 128) { labels[i] = -1; continue; }
-      var bi = 0, bdist = Infinity;
-      for (c = 0; c < k; c++) {
-        var r1 = data[o] - cent[c][0], g1 = data[o + 1] - cent[c][1], b1 = data[o + 2] - cent[c][2];
-        var dd = r1 * r1 + g1 * g1 + b1 * b1;
-        if (dd < bdist) { bdist = dd; bi = c; }
-      }
+      var bi = binLabel[(((data[o] >> SH) * N) + (data[o + 1] >> SH)) * N + (data[o + 2] >> SH)];
       labels[i] = bi;
+      if (bi < 0) continue;
       share[bi]++;
       var lx = i % w, ly = (i / w) | 0, bb = bounds[bi];
       if (lx < bb.x0) bb.x0 = lx;
@@ -210,12 +279,12 @@ var CVDAnalyse = (function () {
       sumX[bi] += lx; sumY[bi] += ly;
     }
     var centres = [];
-    for (c = 0; c < k; c++) {
-      centres.push(share[c] ? { x: sumX[c] / share[c], y: sumY[c] / share[c] }
+    for (j = 0; j < kn; j++) {
+      centres.push(share[j] ? { x: sumX[j] / share[j], y: sumY[j] / share[j] }
                             : { x: w / 2, y: h / 2 });
     }
     return { centroids: cent, labels: labels, share: share, bounds: bounds,
-             centres: centres, total: w * h };
+             centres: centres, total: total };
   }
 
   /* ---------- 相邻关系 ---------- */
@@ -359,7 +428,7 @@ var CVDAnalyse = (function () {
       return { hex: rgb2hex(rgb), rgb: rgb, lab: rgb2lab(rgb[0], rgb[1], rgb[2]), index: i };
     }).filter(Boolean);
 
-    var q = quantize(imageData.data, w, h, CONFIG.K);
+    var q = extract(imageData.data, w, h);
     if (!q) return { colours: [], findings: [], contactPairs: {} };
 
     var keep = [];
@@ -422,39 +491,57 @@ var CVDAnalyse = (function () {
         var contact = pairs[key] || null;
         var touching = !!(contact && contact.n >= CONFIG.CONTACT_MIN);
 
+        var origDE = deltaE(labs[a], labs[b]);
+
         var hits = [];
         ['protan', 'deutan', 'tritan'].forEach(function (tp) {
           var simChroma = chromaDelta(simLabs[tp][a], simLabs[tp][b]);
-          if (simChroma >= CONFIG.SIM_CHROMA_MAX) return;          // 色相没塌
-          /* 色相塌了不等于分不开。白底和青色柱在绿色盲下色相差会从
+          var simLight = lightDelta(simLabs[tp][a], simLabs[tp][b]);
+          var simDE = deltaE(simLabs[tp][a], simLabs[tp][b]);
+
+          /* 判据一：色相塌了，而且明度没能接住。
+
+             色相塌了不等于分不开。白底和青色柱在绿色盲下色相差会从
              35 掉到 2，但两者的明度差有 47——谁都分得开，那一对本来
              就不是靠色相区分的。不设这条线就会把每个"深色对浅色"的
              组合都报成问题，工具随即变成噪音。 */
-          var simLight = lightDelta(simLabs[tp][a], simLabs[tp][b]);
-          if (simLight >= CONFIG.SIM_LIGHT_SAFE) return;
+          var hueCollapse = simChroma < CONFIG.SIM_CHROMA_MAX &&
+                            simLight < CONFIG.SIM_LIGHT_SAFE;
 
-          hits.push({ type: tp, simChroma: simChroma, simLight: simLight });
+          /* 判据二：不管色相塌没塌，模拟之后两块颜色总色差就是太小了。
+             同样给明度留出路——剩下的差别若主要是明度撑起来的，那条
+             线索三种色觉下都在，不算问题。另外要求确实是**损失**出来
+             的：本来就挨得近的一对不是色觉障碍造成的，那是配色本身的
+             问题，不该记在这里。 */
+          var tooClose = simDE < CONFIG.SIM_DE_MAX &&
+                         simLight < CONFIG.SIM_LIGHT_SAFE &&
+                         (origDE - simDE) >= CONFIG.MIN_DE_LOSS;
+
+          if (!hueCollapse && !tooClose) return;
+          hits.push({ type: tp, simChroma: simChroma, simLight: simLight, simDE: simDE });
         });
         if (!hits.length) continue;
 
         /* 以最糟的那一种色觉定严重程度 */
         var worst = hits.reduce(function (m, x) {
-          return x.simLight < m.simLight ? x : m;
+          return x.simDE < m.simDE ? x : m;
         }, hits[0]);
 
         byPair[key] = {
           types: hits.map(function (x) { return x.type; }),
           detail: hits,
-          /* "几乎无法分辨"要两个条件都很小才算。原来只看明度，
-             结果色度 12、明度 12 这种边缘情况也被打成 high——ΔE 合起来
-             约 17，其实是"勉强能分"，标签过重会让人不信任整个工具。 */
-          severity: (worst.simChroma < CONFIG.HIGH_CHROMA_MAX &&
-                     worst.simLight < CONFIG.HIGH_LIGHT_MAX) ? 'high' : 'moderate',
+          /* "几乎无法分辨"直接用模拟后的总色差判。原来分别卡色度和
+             明度两个上限，结果色度 12、明度 12 这种边缘情况被打成 high
+             ——合起来 ΔE 约 17，其实是"勉强能分"，标签过重会让人不信任
+             整个工具。总色差是一个量，说的就是"还剩多少可用的差别"。 */
+          severity: worst.simDE < CONFIG.HIGH_DE_MAX ? 'high' : 'moderate',
           a: q.centroids[a], b: q.centroids[b],
           hexA: rgb2hex(q.centroids[a]), hexB: rgb2hex(q.centroids[b]),
           origChroma: origChroma,
+          origDE: origDE,
           simChroma: worst.simChroma,
           simLight: worst.simLight,
+          simDE: worst.simDE,
           touching: touching,
           contact: contact ? contact.n : 0,
           box: contact ? { x0: contact.x0, y0: contact.y0, x1: contact.x1, y1: contact.y1 } : null,
@@ -475,7 +562,7 @@ var CVDAnalyse = (function () {
     findings.sort(function (p, r) {
       if (p.severity !== r.severity) return p.severity === 'high' ? -1 : 1;
       if (p.touching !== r.touching) return p.touching ? -1 : 1;   // 挨着的更要紧
-      return (p.simChroma - r.simChroma) || (r.contact - p.contact);
+      return (p.simDE - r.simDE) || (r.contact - p.contact);
     });
 
     return {
