@@ -79,8 +79,13 @@
            后台时浏览器不再合成帧，rAF 的回调会一直不执行，界面就永远
            停在"分析中"。setTimeout 不受此影响。 */
         setTimeout(function () {
-          var result = CVDAnalyse.run(data, w, h);
-          lastAnalysis = { result: result, imageData: data, w: w, h: h };
+          /* 把上面那张配色表一起传进去：分析器据此把图里的主色对回
+             使用者自己的色号，报告才能说"撞的是你配色里的 2 号和 4 号"。 */
+          var ref = window.__ctoolPalette ? window.__ctoolPalette() : [];
+          var result = CVDAnalyse.run(data, w, h, ref);
+          /* 留住原图与缩放比：分析在 480px 上跑（快），但导出要用原分辨率 */
+          lastAnalysis = { result: result, imageData: data, w: w, h: h,
+                           source: img, scale: scale, palette: ref };
           renderAnalysis(lastAnalysis);
         }, 16);
       };
@@ -108,88 +113,276 @@
     statusEl.className = 'an-status is-warn';
     statusEl.textContent = fill(t('an.count'), { n: result.findings.length });
 
+    /* 颜色本身是不是超载了？这跟色觉障碍无关，是更上游的问题：
+       类别多到一定程度，谁都记不住颜色对应哪一类。放在最前面，
+       因为如果这条成立，下面逐对调色其实是在治标。 */
+    if (result.colourOverloaded) {
+      var over = document.createElement('div');
+      over.className = 'an-overload';
+      over.textContent = fill(t('an.overload'), { n: result.categoricalCount });
+      listEl.appendChild(over);
+    }
+
     /* 每处问题：图上画框 + 清单里一条 */
     result.findings.forEach(function (f, i) {
-      drawMarker(ctx, f.box, i + 1, w, h);
+      drawMarker(ctx, f, i + 1, 1);
       listEl.appendChild(findingRow(f, i + 1));
     });
 
+    addExportButton(state);
+    addCopyButton(result);
     addCaveat();
   }
 
-  function drawMarker(ctx, box, n, w, h) {
-    var pad = 3;
-    var x = Math.max(0, box.x0 - pad), y = Math.max(0, box.y0 - pad);
-    var bw = Math.min(w - x, box.x1 - box.x0 + pad * 2);
-    var bh = Math.min(h - y, box.y1 - box.y0 + pad * 2);
+  /* 把结果拼成一段文字复制走。
 
-    /* 白底黑框双描边：标注本身不能只靠颜色区分，深浅图上都要看得见 */
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.9)';
-    ctx.strokeRect(x, y, bw, bh);
-    ctx.lineWidth = 1.5; ctx.strokeStyle = '#111';
-    ctx.setLineDash([5, 3]);
-    ctx.strokeRect(x, y, bw, bh);
-    ctx.setLineDash([]);
+     这个工具量的是颜色，量不了语义——它不知道这张图是折线图还是
+     饼图、红色在这里代不代表"错误"。那部分交给别的工具：复制过去，
+     粘到任意 AI 里问就行。不接 API：纯静态站藏不住 key，而浏览器内
+     跑模型对被试的手机来说太重。 */
+  /* 导出标注图（原分辨率）。分析在 480px 缩略图上跑是为了快，
+     但给设计师的图不该跟着糊。 */
+  function addExportButton(state) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn an-export';
+    btn.textContent = fill(t('an.export'), {
+      w: state.source.naturalWidth, h: state.source.naturalHeight
+    });
+    btn.addEventListener('click', function () { exportAnnotated(state); });
+    listEl.appendChild(btn);
+  }
 
-    var r = 11, cx = x + r, cy = y + r;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  function addCopyButton(result) {
+    var wrapEl = document.createElement('div');
+    wrapEl.className = 'an-copy-wrap';
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn ghost an-copy';
+    btn.textContent = t('an.copy');
+    btn.addEventListener('click', function () {
+      var lines = ['Colour-accessibility findings from an automated check of a design image.',
+                   'Measured in CIELAB; "hue difference" is distance on the a*b* plane.', ''];
+      if (result.colourOverloaded) {
+        lines.push('- ' + result.categoricalCount + ' colours are carrying category information.');
+      }
+      result.findings.forEach(function (f, i) {
+        lines.push((i + 1) + '. ' + f.hexA + ' against ' + f.hexB +
+          ' — affects ' + f.types.join(', ') +
+          '; hue difference ' + f.origChroma.toFixed(0) + ' -> ' + f.simChroma.toFixed(0) +
+          ', lightness left ' + f.simLight.toFixed(0) +
+          '; regions read as ' + f.shape +
+          (f.fix ? '; a lightness-only fix exists (' + f.hexB + ' -> ' + f.fix.hex + ')'
+                 : '; no lightness-only fix'));
+      });
+      lines.push('', 'What is this image trying to communicate, and which of these actually',
+                 'matter for reading it? Suggest fixes that encode the information rather',
+                 'than re-encoding the colour.');
+
+      var text = lines.join('\n');
+      function done() {
+        btn.textContent = t('an.copied');
+        setTimeout(function () { btn.textContent = t('an.copy'); }, 2400);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else { fallback(); }
+
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* 复制失败就算了 */ }
+        document.body.removeChild(ta);
+      }
+    });
+
+    var note = document.createElement('p');
+    note.className = 'mono-note';
+    note.textContent = t('an.copy.note');
+
+    wrapEl.appendChild(btn);
+    wrapEl.appendChild(note);
+    listEl.appendChild(wrapEl);
+  }
+
+  /* 标注一处冲突。
+
+     经历过两版都不好：
+       第一版画一个虚线外接框——两块颜色沿长边相接时框会横跨整张图，
+       等于没指出位置。
+       第二版沿整条接缝点圆点——把被检查的色块本身盖住了，比框更糟。
+
+     现在的做法是"指出来，但不盖住"：每处冲突只落一枚紧凑徽章，徽章上
+     嵌着冲突的那两个颜色；徽章用细引线连到两块颜色各自的位置。挨着的
+     一对，引线指向接缝；不挨着的（柱状图里常见的分行系列），两端分别
+     指向两块颜色的质心——这恰恰是最需要说清楚"是这两个撞了"的情形。 */
+  function drawMarker(ctx, f, n, k) {
+    k = k || 1;
+    var W = ctx.canvas.width, H = ctx.canvas.height;
+
+    /* 引线端点：挨着就用接缝中点，否则用两块颜色各自的质心 */
+    var ends = [];
+    if (f.touching && f.seam && f.seam.length >= 2) {
+      var mid = (f.seam.length / 2) | 0; mid -= mid % 2;
+      ends.push({ x: f.seam[mid] * k, y: f.seam[mid + 1] * k });
+    } else {
+      ends.push({ x: f.centreA.x * k, y: f.centreA.y * k });
+      ends.push({ x: f.centreB.x * k, y: f.centreB.y * k });
+    }
+
+    /* 徽章放在端点的中位处，再往上让开一点，尽量不压住内容 */
+    var ax = ends.reduce(function (a, p) { return a + p.x; }, 0) / ends.length;
+    var ay = ends.reduce(function (a, p) { return a + p.y; }, 0) / ends.length;
+    var bw = 52 * k, bh = 22 * k, pad = 5 * k;
+    var cx = Math.max(bw / 2 + pad, Math.min(W - bw / 2 - pad, ax));
+    var cy = Math.max(bh / 2 + pad, Math.min(H - bh / 2 - pad, ay - 18 * k));
+
+    // ── 引线 + 端点小环：细，不遮挡
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ends.forEach(function (p) {
+      [['rgba(255,255,255,.95)', 3.4 * k], ['#111', 1.4 * k]].forEach(function (pass) {
+        ctx.strokeStyle = pass[0]; ctx.lineWidth = pass[1];
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p.x, p.y); ctx.stroke();
+      });
+      [['rgba(255,255,255,.95)', 5.2 * k], ['#111', 3.4 * k]].forEach(function (pass) {
+        ctx.strokeStyle = pass[0]; ctx.lineWidth = 1.6 * k;
+        ctx.beginPath(); ctx.arc(p.x, p.y, pass[1], 0, 6.2832); ctx.stroke();
+      });
+    });
+
+    // ── 徽章：编号 + 两个冲突色
+    var x = cx - bw / 2, y = cy - bh / 2, r = bh / 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, bw, bh, r);
+    else { ctx.moveTo(x + r, y); ctx.arcTo(x + bw, y, x + bw, y + bh, r);
+           ctx.arcTo(x + bw, y + bh, x, y + bh, r); ctx.arcTo(x, y + bh, x, y, r);
+           ctx.arcTo(x, y, x + bw, y, r); }
     ctx.fillStyle = '#111'; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.lineWidth = 2 * k; ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.stroke();
+
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 13px ui-monospace, monospace';
+    ctx.font = 'bold ' + (12 * k) + 'px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(n), cx, cy + 0.5);
+    ctx.fillText(String(n), x + 12 * k, cy);
+
+    var sw = 12 * k, sy = cy - sw / 2;
+    [f.hexA, f.hexB].forEach(function (hex, i) {
+      var sx = x + (23 + i * 14) * k;
+      ctx.fillStyle = hex; ctx.fillRect(sx, sy, sw, sw);
+      ctx.lineWidth = 1 * k; ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.strokeRect(sx, sy, sw, sw);
+    });
+  }
+
+  /* 导出：按原图分辨率重画，而不是把 480px 的分析图放大。
+     分析在缩略图上跑是为了快，导出给设计师的图不该跟着糊。 */
+  function exportAnnotated(state) {
+    var src = state.source;
+    var W = src.naturalWidth, H = src.naturalHeight;
+    var k = W / state.w;                       // 分析坐标 → 原图坐标
+
+    var c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    var x = c.getContext('2d');
+    x.drawImage(src, 0, 0, W, H);
+    state.result.findings.forEach(function (f, i) { drawMarker(x, f, i + 1, k); });
+
+    c.toBlob(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'cvd-check-annotated.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }, 'image/png');
   }
 
   function findingRow(f, n) {
     var row = document.createElement('div');
-    row.className = 'an-row';
+    row.className = 'an-row is-' + f.severity;
 
+    /* 标题行：编号 · 两个色块 · 色值 · 严重度 */
     var head = document.createElement('div');
     head.className = 'an-row-head';
     head.appendChild(badge(n));
-    head.appendChild(swatch(f.hexA));
-    head.appendChild(swatch(f.hexB));
+
+    var pair = document.createElement('span');
+    pair.className = 'an-pair';
+    pair.appendChild(swatch(f.hexA));
+    pair.appendChild(swatch(f.hexB));
+    head.appendChild(pair);
 
     var title = document.createElement('span');
     title.className = 'an-row-title';
-    title.textContent = fill(t('an.row.title'), { a: f.hexA, b: f.hexB });
+    title.textContent = fill(t('an.row.title'), { a: label(f.hexA, f.paletteA), b: label(f.hexB, f.paletteB) });
     head.appendChild(title);
-    row.appendChild(head);
 
     var sev = document.createElement('span');
     sev.className = 'an-sev is-' + f.severity;
     sev.textContent = t('an.sev.' + f.severity);
     head.appendChild(sev);
+    row.appendChild(head);
 
-    /* 报色相塌陷与残留明度，而不是总 ΔE。总 ΔE 会把明度算进去，
-       于是"色相完全一样、只剩明暗"的情况读起来像是还有差别。 */
+    /* 受影响的色觉类型，合并成一行，不再每种类型各出一条结果 */
+    var types = document.createElement('p');
+    types.className = 'an-row-types';
+    types.textContent = fill(t('an.row.types'), {
+      list: f.types.map(function (tp) { return t('ct.' + tp + '.short'); }).join(' · ')
+    }) + ' — ' + t(f.touching ? 'an.touching' : 'an.apart');
+    row.appendChild(types);
+
     var detail = document.createElement('p');
     detail.className = 'an-row-detail';
     detail.textContent = fill(t('an.row.detail.' + f.severity), {
-      type: t(TYPE_KEY[f.type]),
       orig: f.origChroma.toFixed(0),
       sim: f.simChroma.toFixed(0),
       light: f.simLight.toFixed(0)
     });
     row.appendChild(detail);
 
-    var fix = document.createElement('p');
+    /* 改色建议 —— 只有真能拉开明度时才给 */
+    var fix = document.createElement('div');
     fix.className = 'an-row-fix';
     if (f.fix) {
+      fix.appendChild(swatch(f.hexB, 'is-from'));
+      var arrow = document.createElement('span');
+      arrow.className = 'an-arrow';
+      arrow.textContent = '→';
+      fix.appendChild(arrow);
       fix.appendChild(swatch(f.fix.hex));
-      var span = document.createElement('span');
-      span.textContent = fill(t('an.row.fix'), {
-        b: f.hexB, new: f.fix.hex, type: t(TYPE_KEY[f.type])
-      });
-      fix.appendChild(span);
+      var txt = document.createElement('span');
+      txt.className = 'an-fix-text';
+      txt.textContent = fill(t('an.row.fix'), { b: f.hexB, new: f.fix.hex });
+      var gain = document.createElement('em');
+      gain.textContent = fill(t('an.row.fix.gain'), { light: f.fix.simLight.toFixed(0) });
+      txt.appendChild(gain);
+      fix.appendChild(txt);
     } else {
       fix.classList.add('is-nofix');
       fix.textContent = t('an.row.nofix');
     }
     row.appendChild(fix);
 
+    /* 补什么线索，取决于这两块颜色在图上是线、是面还是散点 */
+    var cue = document.createElement('div');
+    cue.className = 'an-cue';
+    var cueH = document.createElement('span');
+    cueH.className = 'an-cue-h';
+    cueH.textContent = t('an.cue.title');
+    var cueP = document.createElement('span');
+    cueP.textContent = t('an.cue.' + f.shape);
+    cue.appendChild(cueH);
+    cue.appendChild(cueP);
+    row.appendChild(cue);
+
     return row;
+  }
+
+  /* 对得上使用者配色表的，显示成"#2 · #1E88E5"；对不上的只给色值。
+     设计师看到序号就知道回上面那张表改哪一行。 */
+  function label(hex, match) {
+    return match ? ('#' + (match.index + 1) + ' · ' + hex) : hex;
   }
 
   function badge(n) {
@@ -199,9 +392,9 @@
     return b;
   }
 
-  function swatch(hex) {
+  function swatch(hex, extra) {
     var s = document.createElement('span');
-    s.className = 'an-sw';
+    s.className = 'an-sw' + (extra ? ' ' + extra : '');
     s.style.background = hex;
     s.title = hex;
     return s;

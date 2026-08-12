@@ -89,39 +89,76 @@ html[lang="zh"] .btn{font-family:var(--sans);letter-spacing:.05em;text-transform
 .privacy{margin-top:14px}
 
 /* ── 分析结果 ─────────────────────────────────────────────── */
-.an-status{margin:22px 0 18px;padding:14px 17px;border-radius:10px;font-size:.92rem;
-  border-left:4px solid var(--line);background:rgba(8,8,11,.5)}
+
+.an-status{margin:22px 0 18px;padding:14px 17px;border-radius:10px;font-size:.94rem;
+  border-left:4px solid var(--line);background:rgba(8,8,11,.55)}
 .an-status.is-clean{border-left-color:var(--deutan)}
 .an-status.is-warn{border-left-color:var(--gold)}
 
-.an-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;align-items:start}
-@media(max-width:820px){.an-layout{grid-template-columns:1fr}}
+/* 图固定在左，清单在右侧滚动——逐条看问题时不用来回滚回去找图 */
+.an-layout{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+  gap:28px;align-items:start}
+@media(max-width:860px){.an-layout{grid-template-columns:1fr}}
 
-.an-figure{margin:0}
-/* 上传的图放在白底上：那是被检查的对象，背后必须中性 */
+.an-figure{margin:0;position:sticky;top:20px}
+@media(max-width:860px){.an-figure{position:static}}
 .an-figure canvas{width:100%;height:auto;display:block;border-radius:8px;
   border:1px solid var(--line);background:#fff}
-.an-figure figcaption{margin-top:10px}
+.an-figure figcaption{margin-top:10px;font-size:.78rem;color:var(--mute);line-height:1.6}
 
-.an-findings{display:flex;flex-direction:column;gap:14px}
-.an-row{border:1px solid var(--line);border-radius:10px;padding:15px 17px;background:rgba(8,8,11,.45)}
-.an-row-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
-.an-row-title{font-family:var(--mono);font-size:.8rem;color:var(--dim)}
-.an-row-detail{font-size:.88rem;color:var(--dim)}
-.an-row-fix{display:flex;align-items:center;gap:9px;margin-top:10px;padding-top:10px;
-  border-top:1px dashed var(--line);font-size:.88rem;color:var(--dim)}
-.an-row-fix.is-nofix{color:var(--gold)}
+.an-findings{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* 颜色超载：排在所有逐对结果之前，因为它成立时逐对调色是治标 */
+.an-overload{padding:14px 16px;border-radius:10px;font-size:.9rem;line-height:1.7;
+  color:var(--paper);background:rgba(255,178,74,.09);border:1px solid rgba(255,178,74,.42)}
+
+/* ── 单条结果 ── */
+.an-row{border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  background:rgba(8,8,11,.42)}
+.an-row.is-high{border-color:rgba(255,91,74,.45)}
+
+.an-row-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:13px 16px;background:rgba(255,255,255,.035);
+  border-bottom:1px solid var(--line)}
+.an-pair{display:inline-flex;gap:0}
+.an-pair .an-sw:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.an-pair .an-sw:last-child{border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-1px}
+.an-row-title{font-family:var(--mono);font-size:.8rem;color:var(--paper);letter-spacing:.02em}
+.an-sev{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+  padding:4px 10px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.an-sev.is-high{color:var(--protan)}
+.an-sev.is-moderate{color:var(--gold)}
+
+.an-row-types{padding:11px 16px 0;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+html[lang="zh"] .an-row-types{font-family:var(--sans);letter-spacing:.04em;text-transform:none;font-size:.78rem}
+.an-row-detail{padding:7px 16px 14px;font-size:.88rem;line-height:1.7;color:var(--dim)}
+
+.an-row-fix{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  padding:12px 16px;font-size:.88rem;color:var(--dim);
+  border-top:1px dashed var(--line);background:rgba(255,255,255,.02)}
+.an-row-fix.is-nofix{display:block;color:var(--gold);line-height:1.7}
+.an-arrow{color:var(--mute);font-size:1rem;line-height:1}
+.an-fix-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.an-fix-text em{font-style:normal;font-size:.78rem;color:var(--mute)}
+
+.an-cue{display:flex;gap:10px;align-items:baseline;padding:12px 16px;
+  border-top:1px solid var(--line);font-size:.86rem;line-height:1.7;color:var(--dim)}
+.an-cue-h{flex:0 0 auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--deutan);padding-top:3px}
+html[lang="zh"] .an-cue-h{font-family:var(--sans);letter-spacing:.04em;
+  text-transform:none;font-size:.78rem;white-space:nowrap}
 
 .an-badge{display:inline-flex;align-items:center;justify-content:center;
   width:22px;height:22px;border-radius:50%;background:var(--paper);color:var(--ink);
   font-family:var(--mono);font-size:12px;font-weight:700;flex:0 0 auto}
-.an-sw{width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,.3);flex:0 0 auto}
-.an-sev{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;padding:4px 10px;
-  border-radius:999px;border:1px solid currentColor;white-space:nowrap}
-.an-sev.is-high{color:var(--protan)}
-.an-sev.is-moderate{color:var(--gold)}
-.an-caveat{margin-top:2px;padding-top:12px;border-top:1px solid var(--line)}
-.an-caveat + .an-caveat{margin-top:8px;padding-top:0;border-top:0}
+.an-sw{width:22px;height:22px;border-radius:5px;border:1px solid rgba(255,255,255,.3);flex:0 0 auto}
+.an-sw.is-from{opacity:.55}
+
+.an-copy-wrap{margin-top:4px;padding-top:16px;border-top:1px solid var(--line)}
+.an-copy{margin-bottom:9px}
+.an-caveat{font-size:.78rem;line-height:1.65}
+.an-caveat + .an-caveat{margin-top:7px}
 
 .colophon{border-top:1px solid var(--line);padding:26px 0 64px;color:var(--mute);font-size:.85rem}
 .colophon a{color:var(--dim)}
@@ -187,3 +224,6 @@ html[lang="zh"] #ctool .ct-img-panel-lbl{font-family:var(--sans);letter-spacing:
   .ct-preset:hover,.ct-cell:hover{transform:none}
 }
 
+
+/* 导出标注图：主按钮样式，排在复制按钮之前 */
+.an-export{margin-top:6px;width:100%;justify-content:center}

@@ -294,4 +294,12 @@
 
     render();
     window.__ctoolRerender=render; // re-run on language switch so ct.check.* text updates
+
+    /* 把当前配色暴露给图片检查用。
+
+       上面这张表是使用者亲手调出来的一套配色；下面检查真实设计时，
+       如果不知道这套配色长什么样，就只能报"图里这两块颜色撞了"，
+       而没法说"撞的是你配色里的第 2 号和第 4 号"。后者才是设计师
+       真正需要的信息——他知道要回去改哪一个色值。 */
+    window.__ctoolPalette = function(){ return palette.slice(); };
   })();
