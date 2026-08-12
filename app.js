@@ -102,6 +102,7 @@
     ctx.putImageData(state.imageData, 0, 0);
 
     listEl.innerHTML = '';
+    shownCues = {};
 
     if (!result.findings.length) {
       statusEl.textContent = t('an.clean');
@@ -298,6 +299,8 @@
     }, 'image/png');
   }
 
+  var shownCues = {};
+
   function findingRow(f, n) {
     var row = document.createElement('div');
     row.className = 'an-row is-' + f.severity;
@@ -324,12 +327,36 @@
     head.appendChild(sev);
     row.appendChild(head);
 
-    /* 受影响的色觉类型，合并成一行，不再每种类型各出一条结果 */
+    /* 直接把"塌成什么样"画出来。
+
+       原来这里只写一句"影响：蓝黄色盲"和几个数字，而真正有说服力的
+       证据——两个颜色在那种色觉下看起来一模一样——被埋在页面最底部的
+       四宫格里，得一路划到底再自己对回来。数字要读，色块一眼就懂。 */
+    var sims = document.createElement('div');
+    sims.className = 'an-sims';
+
+    var normal = document.createElement('div');
+    normal.className = 'an-sim';
+    normal.appendChild(pairSwatch(f.hexA, f.hexB));
+    var nlab = document.createElement('span');
+    nlab.textContent = t('an.sim.normal');
+    normal.appendChild(nlab);
+    sims.appendChild(normal);
+
+    f.types.forEach(function (tp) {
+      var cell = document.createElement('div');
+      cell.className = 'an-sim is-hit';
+      cell.appendChild(pairSwatch(simHex(f.hexA, tp), simHex(f.hexB, tp)));
+      var lab = document.createElement('span');
+      lab.textContent = t('ct.' + tp + '.short');
+      cell.appendChild(lab);
+      sims.appendChild(cell);
+    });
+    row.appendChild(sims);
+
     var types = document.createElement('p');
     types.className = 'an-row-types';
-    types.textContent = fill(t('an.row.types'), {
-      list: f.types.map(function (tp) { return t('ct.' + tp + '.short'); }).join(' · ')
-    }) + ' — ' + t(f.touching ? 'an.touching' : 'an.apart');
+    types.textContent = t(f.touching ? 'an.touching' : 'an.apart');
     row.appendChild(types);
 
     var detail = document.createElement('p');
@@ -364,7 +391,11 @@
     }
     row.appendChild(fix);
 
-    /* 补什么线索，取决于这两块颜色在图上是线、是面还是散点 */
+    /* 补什么线索，取决于这两块颜色在图上是线、是面还是散点。
+       同一种形状的建议只出一次——四条结果重复同一段话是噪音。 */
+    if (shownCues[f.shape]) return row;
+    shownCues[f.shape] = 1;
+
     var cue = document.createElement('div');
     cue.className = 'an-cue';
     var cueH = document.createElement('span');
@@ -383,6 +414,24 @@
      设计师看到序号就知道回上面那张表改哪一行。 */
   function label(hex, match) {
     return match ? ('#' + (match.index + 1) + ' · ' + hex) : hex;
+  }
+
+  function simHex(hex, type) {
+    var v = parseInt(hex.slice(1), 16);
+    return CVDAnalyse.rgb2hex(CVDAnalyse.simulate([(v >> 16) & 255, (v >> 8) & 255, v & 255], type));
+  }
+
+  /* 两个色块贴在一起：中间没有缝，塌了就真的看成一块 */
+  function pairSwatch(a, b) {
+    var w = document.createElement('span');
+    w.className = 'an-pairsw';
+    [a, b].forEach(function (hex) {
+      var i = document.createElement('i');
+      i.style.background = hex;
+      i.title = hex;
+      w.appendChild(i);
+    });
+    return w;
   }
 
   function badge(n) {

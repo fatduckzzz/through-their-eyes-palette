@@ -56,8 +56,9 @@ var I18N = {
     "ct.deutan.short": "deuteranopia",
     "ct.tritan.short": "tritanopia",
     "an.export": "Download annotated image ({w}×{h})",
-    "an.touching": "these two touch on the image",
-    "an.apart": "these two do not touch, but both carry category information — a reader compares them through the legend"
+    "an.touching": "These two touch on the image.",
+    "an.apart": "These two do not touch, but both carry category information — a reader compares them through the legend.",
+    "an.sim.normal": "normal vision"
   },
   "zh": {
     "ct.add": "+ 添加颜色",
@@ -113,8 +114,9 @@ var I18N = {
     "ct.deutan.short": "绿色盲",
     "ct.tritan.short": "蓝黄色盲",
     "an.export": "下载标注图（{w}×{h} 原分辨率）",
-    "an.touching": "这两块在图上接壤",
-    "an.apart": "这两块没有接壤，但都在承担分类信息——读者是通过图例把它们放在一起比较的"
+    "an.touching": "这两块在图上接壤。",
+    "an.apart": "这两块没有接壤，但都在承担分类信息——读者是通过图例把它们放在一起比较的。",
+    "an.sim.normal": "正常色觉"
   }
 };
 

@@ -227,3 +227,17 @@ html[lang="zh"] #ctool .ct-img-panel-lbl{font-family:var(--sans);letter-spacing:
 
 /* 导出标注图：主按钮样式，排在复制按钮之前 */
 .an-export{margin-top:6px;width:100%;justify-content:center}
+
+/* ── 结果行内的模拟对照 ──────────────────────────────────────
+   把"塌成什么样"直接摆在结果里。原来只有一句"影响：蓝黄色盲"，
+   真正的证据在页面最底部的四宫格，得划到底再自己对回来。
+   两个色块贴在一起、中间不留缝：塌了就真的看成一整块。 */
+.an-sims{display:flex;flex-wrap:wrap;gap:14px;padding:12px 16px 2px}
+.an-sim{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.an-sim span{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--mute)}
+html[lang="zh"] .an-sim span{font-family:var(--sans);letter-spacing:.02em;font-size:.72rem}
+.an-sim.is-hit span{color:var(--gold)}
+.an-pairsw{display:inline-flex;border-radius:4px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.28)}
+.an-pairsw i{display:block;width:30px;height:20px}
+.an-sim.is-hit .an-pairsw{border-color:rgba(255,178,74,.55)}
