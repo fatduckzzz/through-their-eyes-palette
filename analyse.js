@@ -81,6 +81,8 @@ var CVDAnalyse = (function () {
        只对应很小的实际色差，该并；两个饱和的设计色离底色远，8.5 度就是
        38 个 RGB 单位的实际差别，不该并。 */
     RAY_PERP_MAX: 12,
+    HUE_MERGE_DEG: 8,         // 色相角差小于这个度数，算同一个设计色的深浅
+    HUE_MERGE_MIN_CHROMA: 18, // 彩度低于此不参与色相归并（色相角是噪声）
     ORIGINAL_CHROMA_MIN: 25, // 原图里这两色的色度差要够大，才说明设计本来指望靠颜色区分
     SIM_CHROMA_MAX: 13,    // 模拟后色度差小于这个值 → 色相塌陷
     /* 模拟后总色差小于这个值 → 不论色相有没有"塌"，两块颜色就是太近了。
@@ -299,8 +301,57 @@ var CVDAnalyse = (function () {
     groups.push({ dir: [0,0,0], head: bgIdx, members: [bgIdx] });
     for (i = 0; i < chosen.length; i++) if (groupOf[i] < 0) groupOf[i] = bgGroup;
 
-    var kn = groups.length;
-    var cent = groups.map(function (g) { return chosen[g.head].rgb; });
+    /* 第二轮：把同一个色相的深浅并掉。
+
+       渐变填充的柱子、3D 侧面的暗部、hover 态、JPEG 压缩噪点——这些都让
+       **一个**设计色以好几个明度出现。上面那轮按射线归并治不了它们：柱子
+       的渐变是"浅蓝到深蓝"，不是"底色到蓝"，方向对不上。
+
+       一般性的判据是：设计色不是一个像素值，是一个**承担某个类别的色相**。
+       色相之内的变化是渲染，不是设计。而且——这一条才是可以放心并的理由
+       ——色相之内的变化正好是色觉障碍**保得住**的那部分：塌掉的是彩度
+       平面，明度不受影响。所以并掉同色相的深浅，不可能因此漏报一处问题。
+
+       8 度是扫出来的，不是拍的。实测同一根柱子的深浅差 1.0 和 5.8 度；
+       跨 Okabe-Ito、Viridis、Tableau 10 和四张真实图表，任意两个真正不同
+       的设计色最小差 15.3 度（Okabe-Ito 的 #0072B2 与 #56B4E9）。在 6/8/10/12
+       度上各跑一遍全套：8 度是唯一每张图、每套配色都 100% 认出设计色的档，
+       且 Tableau 10 仍报 13 处。放到 12 度就开始并掉真正不同的颜色（粉橙
+       #EA8373 与红 #E8384F 只差 10 度），Tableau 10 掉到 7 处——变成漏报。
+
+       近中性的颜色不参与：a*b* 接近零时色相角是数值噪声，算出来的方向没有
+       意义。它们本来也过不了后面"承担分类编码"那道彩度门槛。 */
+    function hueOf(lab) {
+      var a = Math.atan2(lab[2], lab[1]) * 180 / Math.PI;
+      return a < 0 ? a + 360 : a;
+    }
+    var hueGroups = [], hueOfGroup = new Int32Array(groups.length);
+    var gOrder = groups.map(function (g, gi) { return gi; }).sort(function (p, q) {
+      return chosen[groups[q].head].chroma - chosen[groups[p].head].chroma;
+    });                                   // 彩度最高的当代表：渐变和明暗只会让颜色变灰变暗
+    gOrder.forEach(function (gi) {
+      var head = chosen[groups[gi].head];
+      /* 底色永远自成一组。它要参与"这块颜色和底色分不分得开"，
+         被并进某个柱子的色相里就没法比了。 */
+      if (gi !== bgGroup && head.chroma >= CONFIG.HUE_MERGE_MIN_CHROMA) {
+        var hq = hueOf(head.lab);
+        for (var hi = 0; hi < hueGroups.length; hi++) {
+          if (hueGroups[hi].hue === null) continue;
+          var dh = Math.abs(hq - hueGroups[hi].hue);
+          if (dh > 180) dh = 360 - dh;
+          if (dh <= CONFIG.HUE_MERGE_DEG) {
+            hueOfGroup[gi] = hi; hueGroups[hi].members.push(gi); return;
+          }
+        }
+        hueOfGroup[gi] = hueGroups.length;
+        hueGroups.push({ head: groups[gi].head, hue: hq, members: [gi] });
+        return;
+      }
+      hueOfGroup[gi] = hueGroups.length;
+      hueGroups.push({ head: groups[gi].head, hue: null, members: [gi] });
+    });
+    var kn = hueGroups.length;
+    var cent = hueGroups.map(function (g) { return chosen[g.head].rgb; });
 
     /* 每格算一次归属，像素只查表。既比逐像素比对快，也让"混色不贴
        标签"这条规则落在格子上，前后一致。 */
@@ -313,9 +364,9 @@ var CVDAnalyse = (function () {
         var d = deltaE(m, chosen[j].lab);
         if (d < bd) { bd = d; best = j; }
       }
-      // 再映射到它所属的设计色。抗锯齿的边缘像素于是算进柱子本身，
-      // 而不是自成一个颜色。
-      binLabel[k] = bd <= CONFIG.ASSIGN_MAX ? groupOf[best] : -1;
+      // 再经射线组、色相组两级映射回设计色。抗锯齿的边缘、渐变的暗部
+      // 于是都算进柱子本身，而不是各自成为一个颜色。
+      binLabel[k] = bd <= CONFIG.ASSIGN_MAX ? hueOfGroup[groupOf[best]] : -1;
     }
 
     /* 给全图每个像素贴标签，顺便记下每个主色的外接框——
