@@ -124,9 +124,9 @@
       listEl.appendChild(over);
     }
 
-    /* 每处问题：图上画框 + 清单里一条 */
+    /* 每处问题：图上标一处 + 清单里一条 */
+    drawMarkers(ctx, result.findings, 1);
     result.findings.forEach(function (f, i) {
-      drawMarker(ctx, f, i + 1, 1);
       listEl.appendChild(findingRow(f, i + 1));
     });
 
@@ -219,42 +219,109 @@
      嵌着冲突的那两个颜色；徽章用细引线连到两块颜色各自的位置。挨着的
      一对，引线指向接缝；不挨着的（柱状图里常见的分行系列），两端分别
      指向两块颜色的质心——这恰恰是最需要说清楚"是这两个撞了"的情形。 */
-  function drawMarker(ctx, f, n, k) {
-    k = k || 1;
-    var W = ctx.canvas.width, H = ctx.canvas.height;
+  /* 一次排完所有徽章的位置，再统一画。
 
-    /* 引线端点：挨着就用接缝中点，否则用两块颜色各自的质心 */
-    var ends = [];
+     上一版是每处冲突各自定位：取两端中点、往上让 18px、画完收工。单独看
+     每一枚都合理，放在一起就糊了——多处冲突涉及的往往是同几个颜色，两端
+     中点于是全落在同一小片区域，徽章互相叠住、引线交叉成一团。而且每处
+     "先画线再画徽章"，后一条引线会直接横穿前一枚徽章。
+
+     所以拆成两步。先给每枚徽章找一个不与已放置徽章相撞的位置：从"正上方
+     18px"开始试，不行就一圈圈往外找，角度从正上方起、优先往上——图表的
+     标注习惯是往上引，往下容易压到坐标轴。然后**所有引线先画、所有徽章
+     后画**，引线就永远压在徽章底下。 */
+
+  function markerEnds(f, k) {
+    /* 挨着就指接缝中点，否则两端分别指向两块颜色的质心——柱状图里分行
+       摆放的系列不接壤，恰恰最需要说清"是这两个撞了"。 */
     if (f.touching && f.seam && f.seam.length >= 2) {
       var mid = (f.seam.length / 2) | 0; mid -= mid % 2;
-      ends.push({ x: f.seam[mid] * k, y: f.seam[mid + 1] * k });
-    } else {
-      ends.push({ x: f.centreA.x * k, y: f.centreA.y * k });
-      ends.push({ x: f.centreB.x * k, y: f.centreB.y * k });
+      return [{ x: f.seam[mid] * k, y: f.seam[mid + 1] * k }];
+    }
+    return [{ x: f.centreA.x * k, y: f.centreA.y * k },
+            { x: f.centreB.x * k, y: f.centreB.y * k }];
+  }
+
+  /* 把画布切成网格，每处冲突认领离它最近的一个空格。
+
+     试过"从锚点出发一圈圈往外找空位"，不行：它不保证有解。画布小、冲突
+     多的时候，外圈的候选点会被逐个截回边界，于是彼此重合、全部判为相撞，
+     最后落到兜底分支硬放——实测 13 处冲突只画出 5 枚可辨认的徽章，其余
+     叠成了一团。
+
+     网格分配则是构造上不会重叠：槽位互不相交，一个槽只发一次。只要
+     槽位数够（480×206 的画布能切出 8×8 = 64 格，而结果通常十几条），
+     就一定排得开。代价是徽章吸附到网格、可能离内容远一点——但引线本来
+     就是干这个的，而"看得清是哪一枚"比"贴得近"重要。 */
+  function layoutMarkers(findings, W, H, k) {
+    var bw = 52 * k, bh = 22 * k, pad = 4 * k, gap = 4 * k;
+    var stepX = bw + gap, stepY = bh + gap;
+    var cols = Math.max(1, Math.floor((W - pad * 2) / stepX));
+    var rows = Math.max(1, Math.floor((H - pad * 2) / stepY));
+
+    var slots = [];
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        slots.push({ x: pad + bw / 2 + c * stepX + (W - pad * 2 - cols * stepX) / 2,
+                     y: pad + bh / 2 + r * stepY + (H - pad * 2 - rows * stepY) / 2,
+                     used: false });
+      }
     }
 
-    /* 徽章放在端点的中位处，再往上让开一点，尽量不压住内容 */
-    var ax = ends.reduce(function (a, p) { return a + p.x; }, 0) / ends.length;
-    var ay = ends.reduce(function (a, p) { return a + p.y; }, 0) / ends.length;
-    var bw = 52 * k, bh = 22 * k, pad = 5 * k;
-    var cx = Math.max(bw / 2 + pad, Math.min(W - bw / 2 - pad, ax));
-    var cy = Math.max(bh / 2 + pad, Math.min(H - bh / 2 - pad, ay - 18 * k));
+    return findings.map(function (f, i) {
+      var ends = markerEnds(f, k);
+      var ax = ends.reduce(function (s, p) { return s + p.x; }, 0) / ends.length;
+      var ay = ends.reduce(function (s, p) { return s + p.y; }, 0) / ends.length;
+      ay -= 14 * k;                     // 略微偏上：图表的标注习惯是往上引
 
-    // ── 引线 + 端点小环：细，不遮挡
+      var best = null, bestD = Infinity;
+      for (var si = 0; si < slots.length; si++) {
+        if (slots[si].used) continue;
+        var dx = slots[si].x - ax, dy = slots[si].y - ay;
+        var d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = si; }
+      }
+      /* 槽位用光了就不画了，返回 null。
+
+         试过把多出来的沿边缘排一列，那等于把"不重叠"这个保证又丢掉——
+         480×206 的画布只有 56 格，塞 70 处时边缘列自己就叠了 48 对。
+         结果是按严重程度排序的，先占到槽位的正是最要紧的那些；剩下的
+         在右侧清单里一条不少。图上少标几处，好过标成一团看不清哪是哪。 */
+      if (best === null) return null;
+      slots[best].used = true;
+      return { f: f, n: i + 1, ends: ends, cx: slots[best].x, cy: slots[best].y };
+    });
+  }
+
+  function drawMarkers(ctx, findings, k) {
+    k = k || 1;
+    var items = layoutMarkers(findings, ctx.canvas.width, ctx.canvas.height, k)
+                  .filter(Boolean);          // 放不下的不画，见 layoutMarkers
+
+    // ── 第一遍：所有引线和端点小环，细，不遮挡
     ctx.lineCap = ctx.lineJoin = 'round';
-    ends.forEach(function (p) {
-      [['rgba(255,255,255,.95)', 3.4 * k], ['#111', 1.4 * k]].forEach(function (pass) {
-        ctx.strokeStyle = pass[0]; ctx.lineWidth = pass[1];
-        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p.x, p.y); ctx.stroke();
-      });
-      [['rgba(255,255,255,.95)', 5.2 * k], ['#111', 3.4 * k]].forEach(function (pass) {
-        ctx.strokeStyle = pass[0]; ctx.lineWidth = 1.6 * k;
-        ctx.beginPath(); ctx.arc(p.x, p.y, pass[1], 0, 6.2832); ctx.stroke();
+    items.forEach(function (it) {
+      it.ends.forEach(function (p) {
+        [['rgba(255,255,255,.95)', 3.4 * k], ['#111', 1.4 * k]].forEach(function (pass) {
+          ctx.strokeStyle = pass[0]; ctx.lineWidth = pass[1];
+          ctx.beginPath(); ctx.moveTo(it.cx, it.cy); ctx.lineTo(p.x, p.y); ctx.stroke();
+        });
+        [['rgba(255,255,255,.95)', 5.2 * k], ['#111', 3.4 * k]].forEach(function (pass) {
+          ctx.strokeStyle = pass[0]; ctx.lineWidth = 1.6 * k;
+          ctx.beginPath(); ctx.arc(p.x, p.y, pass[1], 0, 6.2832); ctx.stroke();
+        });
       });
     });
 
-    // ── 徽章：编号 + 两个冲突色
+    // ── 第二遍：徽章压在引线之上
+    items.forEach(function (it) { drawBadge(ctx, it, k); });
+  }
+
+  function drawBadge(ctx, it, k) {
+    var f = it.f, cx = it.cx, cy = it.cy;
+    var bw = 52 * k, bh = 22 * k;
     var x = cx - bw / 2, y = cy - bh / 2, r = bh / 2;
+
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x, y, bw, bh, r);
     else { ctx.moveTo(x + r, y); ctx.arcTo(x + bw, y, x + bw, y + bh, r);
@@ -266,7 +333,7 @@
     ctx.fillStyle = '#fff';
     ctx.font = 'bold ' + (12 * k) + 'px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(n), x + 12 * k, cy);
+    ctx.fillText(String(it.n), x + 12 * k, cy);
 
     var sw = 12 * k, sy = cy - sw / 2;
     [f.hexA, f.hexB].forEach(function (hex, i) {
@@ -288,7 +355,7 @@
     c.width = W; c.height = H;
     var x = c.getContext('2d');
     x.drawImage(src, 0, 0, W, H);
-    state.result.findings.forEach(function (f, i) { drawMarker(x, f, i + 1, k); });
+    drawMarkers(x, state.result.findings, k);
 
     c.toBlob(function (blob) {
       var url = URL.createObjectURL(blob);
