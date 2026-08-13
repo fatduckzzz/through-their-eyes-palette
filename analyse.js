@@ -70,6 +70,17 @@ var CVDAnalyse = (function () {
     MIN_BIN_SHARE: 0.0004, // 一格少于总像素的 0.04% 视为噪点
     MIN_SEP: 12,           // 两个主色之间至少要差这么多 ΔE，否则算同一个
     ASSIGN_MAX: 20,        // 像素离最近主色超过这个 ΔE 就不贴标签（多半是抗锯齿混色）
+    /* 判断"是不是同一个设计色的不同透明度"：候选色到那束射线的**垂直
+       距离**（0–255 的 RGB 单位）小于这个数就算是。
+
+       别用固定角度。青 #03C8CE 与蓝 #11BDF7 的夹角是 8.5 度，和"同一个
+       颜色的抗锯齿边缘"的角度误差在同一量级，卡角度必然会把这两个真正
+       不同的设计色并掉——你一眼就能看出图里蓝和青是两根不同的柱子。
+
+       垂直距离自动做对了这个权衡：低透明度的变体离底色近，同样的角度
+       只对应很小的实际色差，该并；两个饱和的设计色离底色远，8.5 度就是
+       38 个 RGB 单位的实际差别，不该并。 */
+    RAY_PERP_MAX: 12,
     ORIGINAL_CHROMA_MIN: 25, // 原图里这两色的色度差要够大，才说明设计本来指望靠颜色区分
     SIM_CHROMA_MAX: 13,    // 模拟后色度差小于这个值 → 色相塌陷
     /* 模拟后总色差小于这个值 → 不论色相有没有"塌"，两块颜色就是太近了。
@@ -239,8 +250,57 @@ var CVDAnalyse = (function () {
     for (i = 0; i < byChroma.length && chosen.length < CONFIG.MAX_COLOURS; i++) tryAdd(byChroma[i]);
     for (i = 0; i < byCount.length && chosen.length < CONFIG.MAX_COLOURS; i++) tryAdd(byCount[i]);
 
-    var kn = chosen.length;
-    var cent = chosen.map(function (o) { return o.rgb; });
+    /* 把同一个设计色的透明度变体收回去。
+
+       一根 55% 不透明度的线画在渐变底上，屏幕上呈现的是合成色，而且
+       底色每处不同、线与线还会交叠，于是**一个**黄色会以 #8C8A44、
+       #8D7231、#6C7243、#5B5535 好几种面目被提出来。逐个报的结果是
+       同一对"黄配红"重复出现三四遍，而且建议改的 #8C8A44 在设计文件
+       里根本不存在——它是黄色的 55%，没人能去改它。
+
+       合成是线性的：C = α·D + (1-α)·B，所以 C - B = α(D - B)。同一个
+       设计色的所有变体，从底色 B 出发的**方向完全一样**，只是长短随
+       α 变。所以按方向归并，取每束射线上最远的那个当代表——那就是
+       不透明处的真实设计色（图例色块、实心标记）。
+
+       注意要在 sRGB 里算：canvas 的 alpha 混合就发生在这个空间，不是
+       线性光空间。 */
+    var bgIdx = 0;
+    for (i = 1; i < chosen.length; i++) if (chosen[i].n > chosen[bgIdx].n) bgIdx = i;
+    var bg = chosen[bgIdx].rgb;
+
+    var groups = [];                       // 每束射线一组
+    var groupOf = new Int32Array(chosen.length);
+    var order = chosen.map(function (o, ix) { return ix; }).sort(function (p, q) {
+      var vp = chosen[p].rgb, vq = chosen[q].rgb;
+      function len2(v) { var a=v[0]-bg[0], b=v[1]-bg[1], c=v[2]-bg[2]; return a*a+b*b+c*c; }
+      return len2(vq) - len2(vp);          // 先放最远的：它才配当代表
+    });
+    order.forEach(function (ix) {
+      var v = [chosen[ix].rgb[0]-bg[0], chosen[ix].rgb[1]-bg[1], chosen[ix].rgb[2]-bg[2]];
+      var len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      if (len < 1) { groupOf[ix] = -1; return; }        // 就是底色本身
+      var dir = [v[0]/len, v[1]/len, v[2]/len];
+      for (var gi = 0; gi < groups.length; gi++) {
+        var d = groups[gi].dir;
+        var proj = v[0]*d[0] + v[1]*d[1] + v[2]*d[2];
+        if (proj <= 0) continue;                       // 在底色另一侧，不是同一束
+        var px_ = v[0] - proj*d[0], py_ = v[1] - proj*d[1], pz_ = v[2] - proj*d[2];
+        if (Math.sqrt(px_*px_ + py_*py_ + pz_*pz_) <= CONFIG.RAY_PERP_MAX) {
+          groupOf[ix] = gi; groups[gi].members.push(ix); return;
+        }
+      }
+      groupOf[ix] = groups.length;
+      groups.push({ dir: dir, head: ix, members: [ix] });
+    });
+
+    /* 底色自成一组，且必须留下——它参与"这块颜色和底色分不分得开"。 */
+    var bgGroup = groups.length;
+    groups.push({ dir: [0,0,0], head: bgIdx, members: [bgIdx] });
+    for (i = 0; i < chosen.length; i++) if (groupOf[i] < 0) groupOf[i] = bgGroup;
+
+    var kn = groups.length;
+    var cent = groups.map(function (g) { return chosen[g.head].rgb; });
 
     /* 每格算一次归属，像素只查表。既比逐像素比对快，也让"混色不贴
        标签"这条规则落在格子上，前后一致。 */
@@ -249,11 +309,13 @@ var CVDAnalyse = (function () {
       if (!cnt[k]) { binLabel[k] = -1; continue; }
       var m = rgb2lab(Math.round(sr[k] / cnt[k]), Math.round(sg[k] / cnt[k]), Math.round(sb[k] / cnt[k]));
       var best = -1, bd = Infinity;
-      for (j = 0; j < kn; j++) {
+      for (j = 0; j < chosen.length; j++) {          // 先找最近的**变体**
         var d = deltaE(m, chosen[j].lab);
         if (d < bd) { bd = d; best = j; }
       }
-      binLabel[k] = bd <= CONFIG.ASSIGN_MAX ? best : -1;
+      // 再映射到它所属的设计色。抗锯齿的边缘像素于是算进柱子本身，
+      // 而不是自成一个颜色。
+      binLabel[k] = bd <= CONFIG.ASSIGN_MAX ? groupOf[best] : -1;
     }
 
     /* 给全图每个像素贴标签，顺便记下每个主色的外接框——
