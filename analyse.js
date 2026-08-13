@@ -350,6 +350,30 @@ var CVDAnalyse = (function () {
       hueOfGroup[gi] = hueGroups.length;
       hueGroups.push({ head: groups[gi].head, hue: null, members: [gi] });
     });
+    /* 每组最终报哪一个色值？两级用两条不同的规则，因为两级对应的
+       物理成因不同。
+
+       射线组内（透明度合成）取**离底色最远**的那个，也就是 α 最接近 1 的。
+       半透明的线每一个像素都是部分混合，面积多数本身就是混合色：一条
+       55% 的黄线，占面积最大的是 #8B8540，而设计色 #F2D64B 只出现在不透明
+       的图例圆点上。这里设计色是极值，不是众数。
+
+       色相组内（渐变、3D 明暗、投影）取**面积最大**的那个射线组。阴影和
+       暗部是少数覆盖在上面，柱子的主体才是设计色。按彩度取会挑中渐变
+       顶端那一小条最鲜艳的：实测紫柱 #B44FE0 因此被报成 #9D45C3。
+
+       两条规则各自都验证过：把射线组也改成按面积，半透明那张的平均偏差
+       从 ΔE 0.3 跳到 34.4；把色相组改成按彩度，带投影的柱子就报不准。 */
+    hueGroups.forEach(function (hg) {
+      var best = hg.members[0], bn = -1;
+      hg.members.forEach(function (gi) {
+        var n = 0;
+        groups[gi].members.forEach(function (ci) { n += chosen[ci].n; });
+        if (n > bn) { bn = n; best = gi; }
+      });
+      hg.head = groups[best].head;      // 该射线组自己的代表（离底色最远的）
+    });
+
     var kn = hueGroups.length;
     var cent = hueGroups.map(function (g) { return chosen[g.head].rgb; });
 
