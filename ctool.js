@@ -10,7 +10,18 @@
 
 (function(){
     var rowsEl=document.getElementById('ctRows'); if(!rowsEl) return;
-    var DEFAULT=['#D81B60','#1E88E5','#FFC107','#004D40'];
+    /* 打开页面看到的默认配色。用 Paul Tol muted 里的四个色。
+
+       原来的默认是 Material Design 2014 那组 #D81B60 / #1E88E5 /
+       #FFC107 / #004D40，常被人称作"色觉友好"，但它从没被认真验证过：
+       #D81B60（品红）在红色盲下会大幅变暗——红色盲对红光的感光效率
+       很低——塌到接近 #004D40（墨绿）那一档，模拟后总色差只剩 14.5，
+       两块深色摆在一起分不开。这不是判据太紧，是这组配色本身在红色
+       盲这一项上确实不行，工具一进来就该指出来。
+
+       换成不进来就报自己一处冲突的默认：Tol muted 四色，模拟后最近
+       的一对仍差 36.5，三种色觉全过。 */
+    var DEFAULT=['#332288','#88CCEE','#DDCC77','#CC6677'];
     var palette=DEFAULT.slice();
 
     /* 色彩计算全部走 cvd.js。这里原来自带一套 Machado 2009 矩阵，
