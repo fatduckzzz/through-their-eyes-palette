@@ -23,6 +23,11 @@
        的一对仍差 36.5，三种色觉全过。 */
     var DEFAULT=['#332288','#88CCEE','#DDCC77','#CC6677'];
     var palette=DEFAULT.slice();
+    /* 当前配色是不是原样来自某个标准预设。是的话，检测结果里会先说
+       一句"这是 IBM/Okabe–Ito/Tol,下面是它已知的弱项"——否则用户
+       载入一个标为"配色"的东西却看到四条冲突,只会觉得工具坏了。
+       一旦手动改过任意一格就清空。 */
+    var activeRef=null;
 
     /* 色彩计算全部走 cvd.js。这里原来自带一套 Machado 2009 矩阵，
        和图片检查那半边用的不是同一套——同一个颜色两边显示的模拟
@@ -117,6 +122,11 @@
       }
       var title=document.createElement('div'); title.className='ct-check-title'; title.textContent=t('ct.check.title');
       el.appendChild(title);
+      if(activeRef){
+        var refnote=document.createElement('div'); refnote.className='ct-check-refnote';
+        refnote.textContent=fill(t('ct.check.refnote'),{name:activeRef});
+        el.appendChild(refnote);
+      }
       collisions.forEach(function(c){
         var row=document.createElement('div'); row.className='ct-warn';
         var head=document.createElement('div'); head.className='ct-warn-head';
@@ -169,7 +179,7 @@
         /* 原生取色器本身可聚焦、可键盘操作，但没有名字，读屏只会
            念"颜色"。补一个。 */
         inp.setAttribute('aria-label',fill(t('ct.a11y.swatch'),{n:N,hex:HEX}));
-        inp.addEventListener('input',function(){palette[idx]=inp.value;render();});
+        inp.addEventListener('input',function(){palette[idx]=inp.value;activeRef=null;render();});
         swatchTrue.appendChild(inp);
         var code=document.createElement('span'); code.className='ct-code'; code.textContent=HEX;
         swatchTrue.appendChild(code);
@@ -178,7 +188,7 @@
           del.type='button';
           /* title='remove' 既没本地化也不是可靠的可及名 */
           del.setAttribute('aria-label',fill(t('ct.a11y.remove'),{n:N,hex:HEX}));
-          del.addEventListener('click',function(e){e.preventDefault();palette.splice(idx,1);render();});
+          del.addEventListener('click',function(e){e.preventDefault();palette.splice(idx,1);activeRef=null;render();});
           swatchTrue.appendChild(del);
         }
         row.appendChild(swatchTrue);
@@ -197,11 +207,16 @@
     }
     document.getElementById('ctAdd').addEventListener('click',function(){
       if(palette.length>=8)return;
-      palette.push('#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0')); render();
+      palette.push('#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0'));
+      activeRef=null; render();
     });
-    document.getElementById('ctReset').addEventListener('click',function(){palette=DEFAULT.slice();render();});
+    document.getElementById('ctReset').addEventListener('click',function(){palette=DEFAULT.slice();activeRef=null;render();});
     document.querySelectorAll('.ct-preset').forEach(function(b){
-      b.addEventListener('click',function(){palette=b.getAttribute('data-pal').split(',');render();});
+      b.addEventListener('click',function(){
+        palette=b.getAttribute('data-pal').split(',');
+        activeRef=b.getAttribute('data-ref')||null;   // 只有 IBM/Wong/Tol 带 data-ref
+        render();
+      });
     });
 
     /* ---------- export a plain-text accessibility report ---------- */
@@ -215,6 +230,7 @@
       if(collisions.length===0){
         lines.push(t('ct.check.ok'));
       } else {
+        if(activeRef){ lines.push(fill(t('ct.check.refnote'),{name:activeRef})); lines.push(''); }
         collisions.forEach(function(c){
           lines.push('- '+t('ct.check.row')
             .replace('{a}', palette[c.i].toUpperCase())
