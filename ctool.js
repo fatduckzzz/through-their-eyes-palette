@@ -13,43 +13,15 @@
     var DEFAULT=['#D81B60','#1E88E5','#FFC107','#004D40'];
     var palette=DEFAULT.slice();
 
-    // sRGB <-> linear
-    function s2l(c){c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}
-    function l2s(c){c=c<=0.0031308?c*12.92:1.055*Math.pow(c,1/2.4)-0.055;return Math.max(0,Math.min(255,Math.round(c*255)));}
-    function hex2rgb(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(function(x){return x+x;}).join('');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
-    function rgb2hex(r){return '#'+r.map(function(v){return ('0'+v.toString(16)).slice(-2);}).join('');}
-    // Brettel/Viénot-style simulation matrices (linear RGB) for dichromacy
-    var M={
-      protan:[[0.152286,1.052583,-0.204868],[0.114503,0.786281,0.099216],[-0.003882,-0.048116,1.051998]],
-      deutan:[[0.367322,0.860646,-0.227968],[0.280085,0.672501,0.047413],[-0.011820,0.042940,0.968881]],
-      tritan:[[1.255528,-0.076749,-0.178779],[-0.078411,0.930809,0.147610],[0.004733,0.691367,0.303900]]
-    };
-    function simulate(hex,type){
-      var rgb=hex2rgb(hex); var lin=[s2l(rgb[0]),s2l(rgb[1]),s2l(rgb[2])]; var m=M[type];
-      var out=[0,1,2].map(function(i){return m[i][0]*lin[0]+m[i][1]*lin[1]+m[i][2]*lin[2];});
-      return rgb2hex([l2s(out[0]),l2s(out[1]),l2s(out[2])]);
-    }
+    /* 色彩计算全部走 cvd.js。这里原来自带一套 Machado 2009 矩阵，
+       和图片检查那半边用的不是同一套——同一个颜色两边显示的模拟
+       结果最大差到 ΔE 17。现在两边共用 Brettel 1997。 */
+    var hex2rgb=CVD.hex2rgb, rgb2hex=CVD.rgb2hex;
+    function simulate(hex,type){ return CVD.simulateHex(hex,type); }
 
     /* ---------- accessibility check: collision detection + suggested fix ---------- */
-    var COLLIDE_DE=12; // CIE76 ΔE below this = "hard to tell apart" in the simulated view
-    function rgb2xyz(rgb){
-      var lin=[s2l(rgb[0]),s2l(rgb[1]),s2l(rgb[2])];
-      return [
-        lin[0]*0.4124+lin[1]*0.3576+lin[2]*0.1805,
-        lin[0]*0.2126+lin[1]*0.7152+lin[2]*0.0722,
-        lin[0]*0.0193+lin[1]*0.1192+lin[2]*0.9505
-      ];
-    }
-    function xyz2lab(xyz){
-      var ref=[0.95047,1.0,1.08883];
-      var f=xyz.map(function(v,i){ v=v/ref[i]; return v>0.008856?Math.pow(v,1/3):(7.787*v+16/116); });
-      return [116*f[1]-16, 500*(f[0]-f[1]), 200*(f[1]-f[2])];
-    }
-    function hex2lab(hex){ return xyz2lab(rgb2xyz(hex2rgb(hex))); }
-    function deltaE(lab1,lab2){
-      var dl=lab1[0]-lab2[0], da=lab1[1]-lab2[1], db=lab1[2]-lab2[2];
-      return Math.sqrt(dl*dl+da*da+db*db);
-    }
+    var COLLIDE_DE=CVD.TH.SIM_DE_MAX;   // 只给 suggestFix 当搜索目标用
+    var hex2lab=CVD.hex2lab, deltaE=CVD.deltaE;
     function hex2hsl(hex){
       var rgb=hex2rgb(hex).map(function(v){return v/255;});
       var max=Math.max.apply(null,rgb), min=Math.min.apply(null,rgb);
@@ -70,13 +42,26 @@
       else if(h<240) rgb=[0,x,c]; else if(h<300) rgb=[x,0,c]; else rgb=[c,0,x];
       return rgb2hex(rgb.map(function(v){ return Math.round((v+m)*255); }));
     }
+    /* 判据与图片检查共用 CVD.judgePair。
+
+       原来这里只卡"模拟后总 ΔE < 12"，漏得很厉害：站上那个
+       "Red / Green"预设按钮里的 #E41A1C / #4DAF4A，三种色觉下最小
+       ΔE 是 21，永远够不到 12，于是配色表对着最经典的红绿撞色显示
+       "没有发现冲突"。换成 judgePair 后它会被报成"只剩明度差"。
+
+       judgePair 一对只出一条（把受影响的色觉类型合并进去），这里
+       展开成每种类型一条，保持原来的渲染逻辑不变。 */
     function findCollisions(){
       var out=[];
       for(var i=0;i<palette.length;i++){
         for(var j=i+1;j<palette.length;j++){
-          ['protan','deutan','tritan'].forEach(function(tp){
-            var de=deltaE(hex2lab(simulate(palette[i],tp)), hex2lab(simulate(palette[j],tp)));
-            if(de<COLLIDE_DE) out.push({i:i,j:j,type:tp,de:de});
+          var la=CVD.hex2lab(palette[i]), lb=CVD.hex2lab(palette[j]);
+          var sa=CVD.simLabs(CVD.hex2rgb(palette[i])), sb=CVD.simLabs(CVD.hex2rgb(palette[j]));
+          var v=CVD.judgePair(la,lb,sa,sb);
+          if(!v) continue;
+          var ii=i, jj=j;
+          v.detail.forEach(function(d){
+            out.push({i:ii,j:jj,type:d.type,de:d.simDE,severity:v.severity});
           });
         }
       }
@@ -107,6 +92,11 @@
     function renderCheck(){
       var el=document.getElementById('ctCheck'); if(!el) return;
       el.innerHTML='';
+      /* 改一个颜色整张表会重画，结论也跟着变。没有 live region 的话
+         读屏用户改完不会知道结果变了。 */
+      el.setAttribute('role','status');
+      el.setAttribute('aria-live','polite');
+      el.setAttribute('aria-label',t('ct.a11y.results'));
       var collisions=findCollisions();
       if(collisions.length===0){
         var ok=document.createElement('div'); ok.className='ct-check-ok';
@@ -157,22 +147,37 @@
     function render(){
       rowsEl.innerHTML='';
       palette.forEach(function(hex,idx){
+        var HEX=hex.toUpperCase(), N=idx+1;
         var row=document.createElement('div'); row.className='ct-row';
+        row.setAttribute('role','group');
+        row.setAttribute('aria-label',fill(t('ct.a11y.row'),{n:N,hex:HEX}));
+
         var swatchTrue=document.createElement('label'); swatchTrue.className='ct-cell ct-pick';
         swatchTrue.style.background=hex;
         var inp=document.createElement('input'); inp.type='color'; inp.value=hex;
+        /* 原生取色器本身可聚焦、可键盘操作，但没有名字，读屏只会
+           念"颜色"。补一个。 */
+        inp.setAttribute('aria-label',fill(t('ct.a11y.swatch'),{n:N,hex:HEX}));
         inp.addEventListener('input',function(){palette[idx]=inp.value;render();});
         swatchTrue.appendChild(inp);
-        var code=document.createElement('span'); code.className='ct-code'; code.textContent=hex.toUpperCase();
+        var code=document.createElement('span'); code.className='ct-code'; code.textContent=HEX;
         swatchTrue.appendChild(code);
         if(palette.length>2){
-          var del=document.createElement('button'); del.className='ct-del'; del.innerHTML='&times;'; del.title='remove';
+          var del=document.createElement('button'); del.className='ct-del'; del.innerHTML='&times;';
+          del.type='button';
+          /* title='remove' 既没本地化也不是可靠的可及名 */
+          del.setAttribute('aria-label',fill(t('ct.a11y.remove'),{n:N,hex:HEX}));
           del.addEventListener('click',function(e){e.preventDefault();palette.splice(idx,1);render();});
           swatchTrue.appendChild(del);
         }
         row.appendChild(swatchTrue);
         ['protan','deutan','tritan'].forEach(function(tp){
-          var c=document.createElement('div'); c.className='ct-cell'; c.style.background=simulate(hex,tp);
+          var sim=simulate(hex,tp);
+          var c=document.createElement('div'); c.className='ct-cell'; c.style.background=sim;
+          /* 模拟色块原本是裸 div，读屏什么都读不到——整张表对
+             非视觉用户等于空白。给每格一个名字。 */
+          c.setAttribute('role','img');
+          c.setAttribute('aria-label',fill(t('ct.a11y.cell'),{hex:sim.toUpperCase(),type:t('ct.'+tp)}));
           row.appendChild(c);
         });
         rowsEl.appendChild(row);
@@ -225,16 +230,11 @@
 
     /* ---------- upload-your-own-image simulator (client-side only, nothing leaves the browser) ---------- */
     var IMG_MAXDIM=480;
-    var S2L_LUT=(function(){ var a=new Float64Array(256); for(var i=0;i<256;i++) a[i]=s2l(i); return a; })();
-    function simulatePixel(r,g,b,type){
-      var m=M[type];
-      var lin=[S2L_LUT[r],S2L_LUT[g],S2L_LUT[b]];
-      return [
-        l2s(m[0][0]*lin[0]+m[0][1]*lin[1]+m[0][2]*lin[2]),
-        l2s(m[1][0]*lin[0]+m[1][1]*lin[1]+m[1][2]*lin[2]),
-        l2s(m[2][0]*lin[0]+m[2][1]*lin[1]+m[2][2]*lin[2])
-      ];
-    }
+    /* 逐像素模拟也走 cvd.js。这里原本是站上第三份模拟实现——配色表
+       一份、这个四宫格一份、图片检查再一份，四宫格和色块用的矩阵还
+       不一样，于是同一张图"配色表里的色块"和"四宫格里的同一块颜色"
+       会显示成两个颜色。 */
+    function simulatePixel(r,g,b,type){ return CVD.simulate([r,g,b],type); }
     function simulateImageData(srcData){
       var out={};
       ['protan','deutan','tritan'].forEach(function(tp){

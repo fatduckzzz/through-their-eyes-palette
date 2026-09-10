@@ -479,8 +479,10 @@
 
   /* 对得上使用者配色表的，显示成"#2 · #1E88E5"；对不上的只给色值。
      设计师看到序号就知道回上面那张表改哪一行。 */
+  /* 原来拼成 "#2 · #249424"，那个 "#2" 看上去像另一个十六进制色号，
+     读者要停一下才知道是"配色表里的第 2 格"。写清楚。 */
   function label(hex, match) {
-    return match ? ('#' + (match.index + 1) + ' · ' + hex) : hex;
+    return match ? fill(t('an.swatchref'), { n: match.index + 1, hex: hex }) : hex;
   }
 
   function simHex(hex, type) {

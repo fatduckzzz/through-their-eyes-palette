@@ -129,60 +129,18 @@ var CVDAnalyse = (function () {
     MIN_SHARE: 0.0004
   };
 
-  function chromaDelta(a, b) {
-    var da = a[1] - b[1], db = a[2] - b[2];
-    return Math.sqrt(da * da + db * db);
-  }
+  /* ---------- 色彩计算：全部走 cvd.js ----------
 
-  function lightDelta(a, b) { return Math.abs(a[0] - b[0]); }
+     这里原来自带一套矩阵和一套 Lab 实现，配色表那边又各自带了
+     一套，两套还不一样。现在统一到 cvd.js，模拟换成 Brettel 1997
+     的完整双半平面版本，理由写在那个文件开头。 */
 
-  /* ---------- 色彩空间 ---------- */
-
-  function s2l(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
-
-  var S2L = (function () {
-    var a = new Float64Array(256);
-    for (var i = 0; i < 256; i++) a[i] = s2l(i);
-    return a;
-  })();
-
-  function rgb2lab(r, g, b) {
-    var R = S2L[r], G = S2L[g], B = S2L[b];
-    var x = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047;
-    var y = (0.2126 * R + 0.7152 * G + 0.0722 * B);
-    var z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
-    function f(t) { return t > 0.008856 ? Math.pow(t, 1 / 3) : (7.787 * t) + 16 / 116; }
-    var fx = f(x), fy = f(y), fz = f(z);
-    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
-  }
-
-  function deltaE(a, b) {
-    var dl = a[0] - b[0], da = a[1] - b[1], db = a[2] - b[2];
-    return Math.sqrt(dl * dl + da * da + db * db);
-  }
-
-  /* ---------- CVD 模拟（与主站同一组矩阵，线性空间） ---------- */
-
-  var M = {
-    protan: [[0.170556992, 0.829443014, 0], [0.170556991, 0.829443008, 0], [-0.004517144, 0.004517144, 1]],
-    deutan: [[0.33066007, 0.66933993, 0], [0.33066007, 0.66933993, 0], [-0.02785538, 0.02785538, 1]],
-    tritan: [[1, 0.1273989, -0.1273989], [0, 0.8739093, 0.1260907], [0, 0.8739093, 0.1260907]]
-  };
-
-  function l2s(v) {
-    v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
-    return Math.max(0, Math.min(255, Math.round(v * 255)));
-  }
-
-  function simulate(rgb, type) {
-    var m = M[type];
-    var lin = [S2L[rgb[0]], S2L[rgb[1]], S2L[rgb[2]]];
-    return [
-      l2s(m[0][0] * lin[0] + m[0][1] * lin[1] + m[0][2] * lin[2]),
-      l2s(m[1][0] * lin[0] + m[1][1] * lin[1] + m[1][2] * lin[2]),
-      l2s(m[2][0] * lin[0] + m[2][1] * lin[1] + m[2][2] * lin[2])
-    ];
-  }
+  var chromaDelta = CVD.chromaDelta;
+  var lightDelta = CVD.lightDelta;
+  var deltaE = CVD.deltaE;
+  var rgb2lab = CVD.rgb2lab;
+  var S2L = CVD.S2L;
+  var simulate = CVD.simulate;
 
   /* ---------- 主色提取（直方图峰值） ----------
 
@@ -469,15 +427,7 @@ var CVDAnalyse = (function () {
 
   /* 在保持色相的前提下拉开明度，直到模拟后也能分开。明度差是
      三种色觉障碍都保留得住的线索，比换色相稳妥。 */
-  function lab2rgb(L, A, B) {
-    var fy = (L + 16) / 116, fx = fy + A / 500, fz = fy - B / 200;
-    function inv(t) { return t > 0.206893 ? t * t * t : (t - 16 / 116) / 7.787; }
-    var x = inv(fx) * 0.95047, y = inv(fy), z = inv(fz) * 1.08883;
-    var r = 3.2406 * x - 1.5372 * y - 0.4986 * z;
-    var g = -0.9689 * x + 1.8758 * y + 0.0415 * z;
-    var b = 0.0557 * x - 0.2040 * y + 1.0570 * z;
-    return [l2s(r), l2s(g), l2s(b)];
-  }
+  var lab2rgb = CVD.lab2rgb;
 
   /* 建议改法：在 Lab 里固定色相与彩度，只推明度。
 

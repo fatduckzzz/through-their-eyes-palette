@@ -3,6 +3,13 @@
    an.* 与 foot.* 为本站新增。 */
 var I18N = {
   "en": {
+    "ct.a11y.cell": "{hex} as seen with {type}",
+    "ct.a11y.conflicts": "{n} potential conflicts found",
+    "ct.a11y.noconflicts": "No conflicts",
+    "ct.a11y.remove": "Remove colour {n}, {hex}",
+    "ct.a11y.results": "Accessibility check results",
+    "ct.a11y.row": "Colour {n}, {hex}",
+    "ct.a11y.swatch": "Colour {n}, {hex}. Select to edit.",
     "ct.add": "+ Add colour",
     "ct.check.apply": "Apply",
     "ct.check.nofix": "No automatic fix found — try adjusting lightness by hand.",
@@ -33,6 +40,7 @@ var I18N = {
     "an.clean": "No collapsing colour pairs found. Every pair that is distinguishable to typical vision stays distinguishable under protanopia, deuteranopia and tritanopia.",
     "an.count": "{n} place(s) where two colours become hard to tell apart",
     "an.row.title": "{a} against {b}",
+    "an.swatchref": "{hex} (swatch {n})",
     "an.row.fix": "Change {b} to {new}",
     "an.row.nofix": "No lightness-only fix works here without turning it into a different colour. This pair needs a second cue.",
     "an.caveat": "Simulation is an approximation, and this check only looks at colour. A pair that passes here can still be unreadable for other reasons — small type, low contrast, or colour carrying meaning on its own.",
@@ -61,6 +69,13 @@ var I18N = {
     "an.sim.normal": "normal vision"
   },
   "zh": {
+    "ct.a11y.cell": "{hex} 在{type}下的样子",
+    "ct.a11y.conflicts": "发现 {n} 处可能的冲突",
+    "ct.a11y.noconflicts": "没有冲突",
+    "ct.a11y.remove": "删除第 {n} 个颜色 {hex}",
+    "ct.a11y.results": "无障碍检测结果",
+    "ct.a11y.row": "第 {n} 个颜色 {hex}",
+    "ct.a11y.swatch": "第 {n} 个颜色 {hex}，可选中修改",
     "ct.add": "+ 添加颜色",
     "ct.check.apply": "应用修改",
     "ct.check.nofix": "未找到自动修复方案——可尝试手动调整明度。",
@@ -91,6 +106,7 @@ var I18N = {
     "an.clean": "没有发现会塌陷的颜色对。凡是正常色觉能分开的组合，在红色盲、绿色盲和蓝黄色盲下也仍然分得开。",
     "an.count": "发现 {n} 处颜色会变得难以分辨",
     "an.row.title": "{a} 与 {b}",
+    "an.swatchref": "{hex}（配色表第 {n} 格）",
     "an.row.fix": "把 {b} 改成 {new}",
     "an.row.nofix": "只调明度救不回来，再改就变成另一个颜色了。这一对需要颜色之外的线索。",
     "an.caveat": "模拟只是近似，而且这里只检查了颜色。通过检查不等于就可读——字号太小、对比度不足，或者颜色本身承担了意义，都仍然会造成问题。",
