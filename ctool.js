@@ -75,9 +75,10 @@
           var sa=CVD.simLabs(CVD.hex2rgb(palette[i])), sb=CVD.simLabs(CVD.hex2rgb(palette[j]));
           var v=CVD.judgePair(la,lb,sa,sb);
           if(!v) continue;
-          var ii=i, jj=j;
+          var ii=i, jj=j, rare=v.rareTypeOnly;
           v.detail.forEach(function(d){
-            out.push({i:ii,j:jj,type:d.type,de:d.simDE,severity:v.severity});
+            out.push({i:ii,j:jj,type:d.type,de:d.simDE,severity:v.severity,
+                      rare:rare&&d.type==='tritan'});
           });
         }
       }
@@ -114,12 +115,16 @@
       el.setAttribute('aria-live','polite');
       el.setAttribute('aria-label',t('ct.a11y.results'));
       var collisions=findCollisions();
+      var common=collisions.filter(function(c){return !c.rare;});
+      var rare=collisions.filter(function(c){return c.rare;});
+
       if(collisions.length===0){
         var ok=document.createElement('div'); ok.className='ct-check-ok';
         ok.textContent=t('ct.check.ok');
         el.appendChild(ok);
         return;
       }
+
       var title=document.createElement('div'); title.className='ct-check-title'; title.textContent=t('ct.check.title');
       el.appendChild(title);
       if(activeRef){
@@ -127,7 +132,8 @@
         refnote.textContent=fill(t('ct.check.refnote'),{name:activeRef});
         el.appendChild(refnote);
       }
-      collisions.forEach(function(c){
+
+      function warnRow(c){
         var row=document.createElement('div'); row.className='ct-warn';
         var head=document.createElement('div'); head.className='ct-warn-head';
         var swA=document.createElement('span'); swA.className='sw'; swA.style.background=palette[c.i];
@@ -152,7 +158,7 @@
           suggestTxt.textContent=t('ct.check.suggest').replace('{b}', palette[c.j].toUpperCase()).replace('{new}', fix.toUpperCase());
           var applyBtn=document.createElement('button'); applyBtn.className='ct-fixbtn'; applyBtn.textContent=t('ct.check.apply');
           (function(jIdx,newHex){
-            applyBtn.addEventListener('click',function(){ palette[jIdx]=newHex; render(); });
+            applyBtn.addEventListener('click',function(){ palette[jIdx]=newHex; activeRef=null; render(); });
           })(c.j, fix);
           fixRow.appendChild(swOld); fixRow.appendChild(arrow); fixRow.appendChild(swNew);
           fixRow.appendChild(suggestTxt); fixRow.appendChild(applyBtn);
@@ -161,8 +167,26 @@
           fixRow.appendChild(noFix);
         }
         row.appendChild(fixRow);
-        el.appendChild(row);
-      });
+        return row;
+      }
+
+      /* 红绿两型的问题(约占男性 8.5%)：正常展示。一条都没有就先说
+         "常见的两型下没问题"。 */
+      if(common.length===0){
+        var okc=document.createElement('div'); okc.className='ct-check-ok';
+        okc.textContent=t('ct.check.okcommon');
+        el.appendChild(okc);
+      } else {
+        common.forEach(function(c){ el.appendChild(warnRow(c)); });
+      }
+
+      /* 只在蓝黄色盲下才塌的对(约万分之一)：单独一组，放后面。 */
+      if(rare.length){
+        var rh=document.createElement('div'); rh.className='ct-check-subhead';
+        rh.textContent=fill(t('ct.check.tritanhead'),{n:rare.length});
+        el.appendChild(rh);
+        rare.forEach(function(c){ el.appendChild(warnRow(c)); });
+      }
     }
 
     function render(){
@@ -231,7 +255,10 @@
         lines.push(t('ct.check.ok'));
       } else {
         if(activeRef){ lines.push(fill(t('ct.check.refnote'),{name:activeRef})); lines.push(''); }
-        collisions.forEach(function(c){
+        var xcommon=collisions.filter(function(c){return !c.rare;});
+        var xrare=collisions.filter(function(c){return c.rare;});
+        if(xcommon.length===0) lines.push(t('ct.check.okcommon'));
+        function reportRow(c){
           lines.push('- '+t('ct.check.row')
             .replace('{a}', palette[c.i].toUpperCase())
             .replace('{b}', palette[c.j].toUpperCase())
@@ -241,7 +268,9 @@
           lines.push('  '+(fix
             ? t('ct.check.suggest').replace('{b}', palette[c.j].toUpperCase()).replace('{new}', fix.toUpperCase())
             : t('ct.check.nofix')));
-        });
+        }
+        xcommon.forEach(reportRow);
+        if(xrare.length){ lines.push(''); lines.push(fill(t('ct.check.tritanhead'),{n:xrare.length})); xrare.forEach(reportRow); }
       }
       var blob=new Blob([lines.join('\n')], {type:'text/plain'});
       var url=URL.createObjectURL(blob);

@@ -128,22 +128,33 @@ var CVD = (function () {
 
   /* ---------- 判据 ----------
 
-     阈值和两条规则整体沿用 analyse.js 里调好的那一套，只是搬到
-     这里来，好让配色表和图片检查用同一份。
+     校准目标（2026-09 复核）：拿 Paul Tol 自己的红绿模拟公式
+     （technical note 式 1、2）跑 IBM / Okabe–Ito / Tol 三套配色，
+     结论是——在红绿两型下它们基本干净，唯一稳定塌掉的是
+     Okabe–Ito 的橙 #E69F00 / 黄 #F0E442（Tol 公式下模拟色度差
+     只剩 2.7，这也是文献里公认的弱对）。判据要复现这个结果：
+     红绿的清晰对不误报，橙黄这种真塌的要抓到。
 
-     配色表原来只卡"模拟后 ΔE < 12"，那条规则漏得很厉害：站上
-     "Red / Green"预设按钮下的 #E41A1C / #4DAF4A，三种色觉下最小
-     ΔE 是 21，永远够不到 12，于是配色表对着最经典的红绿撞色显示
-     "没有发现冲突"。 */
+     判据二原来只卡 "模拟后 ΔE < 22"，偏松，会把色相其实还在、
+     只是 ΔE 十七八的对也报出来（Tol muted 的青/玫瑰之类）。收紧
+     成：色相也得确实塌了（simChroma < 15）才用总色差兜底，上限
+     从 22 收到 19。
+
+     判据一（真·色相塌陷）不动。 */
   var TH = {
     ORIGINAL_CHROMA_MIN: 25, // 原图里本来就不靠颜色分的，不算问题
     SIM_CHROMA_MAX: 13,      // 模拟后色度差低于此 → 色相塌了
-    SIM_DE_MAX: 22,          // 模拟后总色差低于此 → 剩下的差别不够用
+    CLOSE_CHROMA_MAX: 15,    // 判据二只在色相也塌到这个程度以下才生效
+    SIM_DE_MAX: 19,          // 判据二：模拟后总色差低于此 → 剩下的差别不够用
     HIGH_DE_MAX: 13,         // 低于此 → 几乎无法分辨
     MIN_DE_LOSS: 12,         // 前后至少损失这么多，才算色觉障碍造成的
     SIM_LIGHT_SAFE: 18,      // 明度差够大就不报：明度三种色觉都保得住
     SIM_LIGHT_TARGET: 28     // 建议改法要达到的模拟后明度差
   };
+
+  /* 红绿两型合计约占男性 8.5%，蓝黄型约万分之一。渲染时把只在蓝黄
+     下才塌的对单独归一组、放后面，别让它淹没红绿的结论。 */
+  var COMMON_TYPES = { protan: 1, deutan: 1 };
 
   var TYPES = ['protan', 'deutan', 'tritan'];
 
@@ -163,10 +174,10 @@ var CVD = (function () {
 
       /* 判据一：色相塌了，而且明度没能接住。 */
       var hueCollapse = sc < TH.SIM_CHROMA_MAX && sl < TH.SIM_LIGHT_SAFE;
-      /* 判据二：不管色相塌没塌，模拟之后总色差就是太小了，
+      /* 判据二：色相也塌到 CLOSE_CHROMA_MAX 以下、总色差又太小，
          而且这个"小"确实是损失出来的。 */
-      var tooClose = sd < TH.SIM_DE_MAX && sl < TH.SIM_LIGHT_SAFE &&
-                     (origDE - sd) >= TH.MIN_DE_LOSS;
+      var tooClose = sc < TH.CLOSE_CHROMA_MAX && sd < TH.SIM_DE_MAX &&
+                     sl < TH.SIM_LIGHT_SAFE && (origDE - sd) >= TH.MIN_DE_LOSS;
       if (!hueCollapse && !tooClose) continue;
       hits.push({ type: tp, simChroma: sc, simLight: sl, simDE: sd });
     }
@@ -175,10 +186,14 @@ var CVD = (function () {
     var worst = hits[0];
     for (var j = 1; j < hits.length; j++) if (hits[j].simDE < worst.simDE) worst = hits[j];
 
+    /* 只在蓝黄（tritan）下才塌、红绿两型都过的对，单独标出来。 */
+    var commonOnly = hits.some(function (x) { return COMMON_TYPES[x.type]; });
+
     return {
       types: hits.map(function (x) { return x.type; }),
       detail: hits,
       severity: worst.simDE < TH.HIGH_DE_MAX ? 'high' : 'moderate',
+      rareTypeOnly: !commonOnly,   // true = 只在蓝黄色盲下才成问题
       origChroma: origChroma,
       origDE: origDE,
       simChroma: worst.simChroma,
