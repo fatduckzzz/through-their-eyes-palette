@@ -1,0 +1,51 @@
+/* prism.css: the same look as the story ("Prism Noir"), loaded after style.css.
+   Panels stay opaque on purpose: this is a tool for judging colour, so nothing may tint what is behind a swatch. */
+@font-face{font-family:"Fraunces";src:url("assets/fonts/fraunces-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Fraunces";src:url("assets/fonts/fraunces-italic-latin.woff2") format("woff2");font-weight:100 900;font-style:italic;font-display:swap}
+@font-face{font-family:"Hanken Grotesk";src:url("assets/fonts/hanken-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Spline Sans Mono";src:url("assets/fonts/spline-mono-latin.woff2") format("woff2");font-weight:300 700;font-style:normal;font-display:swap}
+:root{
+  --ink:#050507; --ink-2:#0a0a0f; --card:#0e0e14;
+  --paper:#f6f1e7; --dim:#e2dccf; --mute:#aaa498;
+  --line:rgba(255,255,255,.11);
+  --glass:linear-gradient(160deg,rgba(255,255,255,.065),rgba(255,255,255,.018));
+  --glass-b:rgba(255,255,255,.1);
+  --spectrum:linear-gradient(90deg,#ff5b4a,#ffb24a,#e8e04a,#7fd36b,#19c2c2,#46a6ff,#a47cf0);
+  --serif:"Fraunces",Georgia,serif;
+  --sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Spline Sans Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+body{
+  background:
+    radial-gradient(1100px 680px at 8% -8%,rgba(255,91,74,.16),transparent 62%),
+    radial-gradient(1000px 700px at 104% 2%,rgba(70,166,255,.15),transparent 62%),
+    radial-gradient(900px 720px at 86% 112%,rgba(127,211,107,.11),transparent 62%),
+    radial-gradient(900px 620px at -4% 104%,rgba(255,178,74,.11),transparent 62%),
+    #050507;
+  background-attachment:fixed;
+}
+#ambient{opacity:.34;filter:blur(80px) saturate(125%)}
+::selection{background:#ffb24a;color:#050507}
+.masthead{border-bottom:1px solid var(--glass-b)}
+.brand{font-family:var(--serif);font-size:.95rem;letter-spacing:.16em;text-transform:uppercase}
+.brand em{font-style:normal;color:var(--mute);letter-spacing:.1em}
+.back-story{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;color:var(--paper);
+  padding:11px 16px;border-radius:999px;border:1px solid var(--glass-b);background:rgba(255,255,255,.04);transition:.2s}
+.back-story:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4)}
+.back-story:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.kicker{display:inline-flex;align-items:center;gap:11px;padding:8px 16px 8px 12px;border:1px solid var(--glass-b);border-radius:999px;background:rgba(255,255,255,.04)}
+.kicker::before{content:"";width:9px;height:9px;border-radius:50%;background:conic-gradient(#ff5b4a,#ffb24a,#7fd36b,#46a6ff,#ff5b4a);box-shadow:0 0 14px rgba(255,178,74,.7)}
+h1{font-weight:300;font-size:clamp(2.2rem,5.2vw,4rem);line-height:1.04;letter-spacing:-.025em}
+h1::after{content:"";display:block;width:92px;height:4px;margin:20px 0 0;border-radius:4px;background:var(--spectrum);box-shadow:0 0 28px rgba(255,178,74,.5)}
+h2{font-weight:300}
+.lede{font-size:clamp(1.02rem,1.5vw,1.18rem);line-height:1.65}
+.panel{background:var(--glass),var(--card);border:1px solid var(--glass-b);border-radius:22px;box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+.btn{background:linear-gradient(180deg,#fffdf8,#ece5d6);color:#07070a;font-weight:500;letter-spacing:.15em;
+  box-shadow:0 0 0 1px rgba(255,255,255,.55),0 18px 44px -16px rgba(255,178,74,.55),0 4px 14px -4px rgba(0,0,0,.6)}
+.btn:hover{transform:translateY(-2px)}
+.btn.ghost{background:rgba(255,255,255,.04);color:var(--paper);box-shadow:0 0 0 1px var(--glass-b)}
+.btn.ghost:hover{background:rgba(255,255,255,.1);box-shadow:0 0 0 1px rgba(255,255,255,.4)}
+#ctool .ct-preset{border-color:var(--glass-b);background:rgba(255,255,255,.05)}
+#ctool .ct-preset:hover{background:var(--paper);color:#07070a;border-color:var(--paper)}
+.an-row,.an-status,.an-overload{border-radius:16px}
+@media(prefers-reduced-motion:reduce){.btn,.back-story{transition:none}.btn:hover{transform:none}}

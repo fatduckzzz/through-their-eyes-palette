@@ -1,67 +1,65 @@
-# 配色可及性检查 · Colour Accessibility Checker
+# Palette Tool · Through Their Eyes
 
-一个静态网页工具：检查配色方案和设计图对色觉障碍者是否可及。全部在浏览器本地运行，没有后端，图片不会上传。
+The standalone palette and chart checker from [Through Their Eyes](https://fatduckzzz.github.io/through-their-eyes/), an interactive data story about colour vision deficiency (CVD). It runs entirely in your browser: no backend, no tracking, and images are never uploaded.
 
-## 它做什么
+Live: https://fatduckzzz.github.io/through-their-eyes-palette/
 
-**配色表** —— 输入几个颜色，并排看它们在红色盲、绿色盲、蓝黄色盲下的样子，自动标出会互相混淆的色对并给出替代色。渲染部分抽自 [through-their-eyes](https://github.com/fatduckzzz/through-their-eyes)（`ctool.js`），但**色觉模拟与冲突判据已改为与图片检查共用 `cvd.js`**——原先两边各带一套矩阵、各用一套判据，同一个颜色两边显示的模拟结果最大差到 ΔE 17，配色表还会漏报红绿撞色。
+The story has a guided version of this tool (four short acts: see, fix, add a cue, your turn). This repository is the **full tool**: the same checker, wording and look, plus per-pair fix suggestions, an annotated image and a report export.
 
-**图片检查** —— 上传一张图表、截图或设计稿，工具会告诉你**哪两块颜色**在**哪种色觉**下会塌到一起、**它们在图上的哪个位置接壤**，并给出修改建议。这是本站新增的部分（`analyse.js`）。
+## What it does
 
-## 为什么不是又一个模拟器
+**Palette table.** Add colours or start from a known palette (Okabe–Ito, Tol bright, IBM, Tableau 10, ColorBrewer Set1, red/green). See each colour under protanopia, deuteranopia and tritanopia, find the pairs that lose their difference, and apply a suggested fix.
 
-现有的 CVD 工具几乎都停在并排模拟：把原图和模拟图放一起，剩下的靠设计师自己看。Geddes 等人（2025）对 113 篇文献做的范围综述把这件事说得很直接——绝大多数工具只做诊断，很少帮设计师找到解法，他们列出的第一条研究机会就是「开发能主动协助设计师**选择**可及颜色的工具，而不只是判断某组配色是否不可及」。
+**Chart checker.** Upload a chart, slide or screenshot. The tool finds the main colours used for categories, shows which two colours lose their difference for which type of colour vision, where on the image they meet, and suggests a fix or a second cue (labels, dashes, markers).
 
-这个工具试着往前一步：定位问题、解释原因、给出可执行的改法。
+Each flagged pair is graded:
 
-## 判据
+- **nearly identical**: the simulated colour difference is under 13
+- **harder to tell apart**: the difference is reduced, but some lightness contrast remains
 
-判据在 `cvd.js` 的 `judgePair()` 里，配色表和图片检查共用同一份。
+## The rule
 
-| 条件 | 阈值 | 为什么 |
-| --- | --- | --- |
-| 原图里这两色本来靠颜色区分 | 色度差 > 25 | 本来就没打算靠颜色分开的，不算问题 |
-| 模拟后色相塌了 | 色度差 < 13 | |
-| 或者：模拟后总色差就是太小 | ΔE < 22 且确实是损失出来的 | 只测色度塌陷会漏掉经典红绿 |
-| 但明度拉开了就不报 | 明度差 ≥ 18 | 明度是三种色觉都保得住的线索 |
+The same rule is used for the palette table and the chart checker (`judgePair()` in `cvd.js`, and `analyse.js`). A pair is flagged for a type of colour vision when:
 
-最后一条是关键。不设它，每个"深色对浅色"的组合都会被报成问题，工具随即变成噪音。
+| Condition | Threshold |
+| --- | --- |
+| The two colours were clearly different to begin with | chroma difference above 25 |
+| After simulation the hue difference collapses | chroma difference below 13 |
+| or the total difference is too small, and it was lost to the simulation | colour difference below 22, and a loss of at least 12 |
+| and lightness does not rescue the pair | lightness difference below 18 |
 
-空间相邻**不再**作为必要条件。柱状图各系列本来就不挨边，读者靠图例把它们联系起来——那是最常见的排布，却会被相邻判定整个跳过。接壤与否降级成元数据，只用来决定标记画在哪、以及排序时谁靠前。
+Lightness is the cue all three types keep, so a large lightness difference is a complete encoding on its own. Without that condition every dark-against-light pair would be flagged.
 
-**两条判据都要，只留一条都会漏。** 色觉障碍塌掉的是 CIELAB 的 a\*b\* 平面（色度轴），明度基本不受影响，所以第一条量的是色度。但只量色度也不够：站上"Red / Green"预设按钮里的 `#E41A1C` 与 `#4DAF4A`，在绿色盲下变成 `#947E00` 和 `#A7954F`，色度差 19.4——超过 13 那条线，第一条判据不触发；可总 ΔE 只剩 21.3，明度差 8.7，两块土黄色摆在一起根本分不开。这一对全靠第二条抓出来。
+Spatial contact is not required: bars in a bar chart do not touch, and readers compare them through the legend. Contact only decides where the marker is drawn and how findings are ordered.
 
-色度塌陷说的是"损失的是什么"，总 ΔE 说的是"剩下的够不够用"。
+The thresholds are the ones frozen before the random audit of 120 public charts described in the story's [method page](https://fatduckzzz.github.io/through-their-eyes/method.html). On that sample the rule agrees closely with a plain CIEDE2000 threshold of about 14, so it is not claimed to be more accurate; what it adds is which cue is lost, a severity grade, where the colours meet, and an explicit lightness escape.
 
-结果分两级：
+## Limits
 
-- **几乎无法分辨** —— 色度塌了，明度也没拉开
-- **只剩明度差** —— 色度塌了但明度还在。大色块尚可，小图标或屏幕偏暗时仍会认错
+- Simulation uses Brettel, Viénot and Mollon (1997), with constants from [libDaltonLens](https://github.com/DaltonLens/libDaltonLens). It models dichromacy, not anomalous trichromacy, and is an approximation, not any one person's perception.
+- **The checker has not been validated against people with colour vision deficiency.** A flag is a warning, not proof that a reader fails.
+- It checks colour only. Text size, contrast and meaning carried by colour are out of scope, and passing is not a guarantee of readability.
+- Main colours are found from peaks in a colour histogram. Photos, gradients and compressed images can give false alarms, and very dense charts can merge small but important colours.
 
-## 局限
+## Run it
 
-- 模拟用 Brettel 1997（两个半平面，常数取自 [libDaltonLens](https://github.com/DaltonLens/libDaltonLens)）。这是近似，不等于任何一位具体使用者的真实感知。之所以不用 Viénot 1999 的单平面简化：Viénot 那篇自己写明该简化只对红绿色盲成立，对蓝黄色盲不成立——用错了会在蓝黄这一项上产生假阳性
-- 只检查了颜色。字号太小、对比度不足、颜色本身承担了意义——这些都不在检查范围内，通过检查不等于可读
-- 主色提取用 k-means（K=10），非常复杂的图像可能合并掉细小但重要的色块
-
-## 开发
-
-无构建步骤，无依赖。
+No build step, no dependencies.
 
 ```bash
 python -m http.server 8000
 ```
 
 ```
-index.html      页面结构
-i18n.js         中英文案 + t() / fill()
-cvd.js          色觉模拟（Brettel 1997）+ 共享判据 judgePair()
-ctool.js        配色表渲染（模拟与判据走 cvd.js）
-analyse.js      图像分析引擎，纯函数，可单独测试
-app.js          页面装配、语言切换、结果渲染
-style.css       基础版式 + 抽自主站的 .ct-* 规则
+index.html      page structure
+i18n.js         English text, t() and fill()
+cvd.js          colour-vision simulation and the shared judgePair() rule
+ctool.js        palette table
+analyse.js      chart analysis engine (pure functions)
+app.js          page wiring and result rendering
+style.css       base layout
+prism.css       the story's look (fonts, glow, glass panels)
 ```
 
-色彩计算只有 `cvd.js` 一份，改模拟或改阈值都只动它。之前站上有**三份**互不一致的模拟实现（配色表色块、四宫格逐像素、图片检查各一份）。
+`cvd.js` and `analyse.js` are byte-identical to the copies in the story repository. If you change a threshold, change both places and say so.
 
-字体全部走系统栈，不加载 Google Fonts——它在中国大陆不可达，会阻塞首屏渲染。
+Fonts are self-hosted (SIL Open Font License): Fraunces, Hanken Grotesk, Spline Sans Mono.

@@ -13,23 +13,12 @@
   /* ---------- i18n ---------- */
 
   function applyLang() {
-    document.documentElement.lang = LANG;
+    document.documentElement.lang = 'en';
     document.querySelectorAll('[data-i]').forEach(function (el) {
       el.textContent = t(el.getAttribute('data-i'));
     });
-    document.querySelectorAll('#langtoggle button').forEach(function (b) {
-      b.classList.toggle('on', b.getAttribute('data-lang') === LANG);
-    });
     if (window.__ctoolRerender) window.__ctoolRerender();
   }
-
-  document.querySelectorAll('#langtoggle button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      LANG = b.getAttribute('data-lang');
-      applyLang();
-      if (lastAnalysis) renderAnalysis(lastAnalysis);
-    });
-  });
 
   applyLang();
 
@@ -112,7 +101,9 @@
     }
 
     statusEl.className = 'an-status is-warn';
-    statusEl.textContent = fill(t('an.count'), { n: result.findings.length });
+    var nHigh = result.findings.filter(function (f) { return f.severity === 'high'; }).length;
+    statusEl.textContent = (result.findings.length === 1 ? '1 colour pair loses' : result.findings.length + ' colour pairs lose') + ' much of its difference for at least one type of colour vision' +
+      (nHigh ? '; ' + nHigh + (nHigh === 1 ? ' becomes' : ' become') + ' nearly identical.' : '; none become nearly identical.');
 
     /* 颜色本身是不是超载了？这跟色觉障碍无关，是更上游的问题：
        类别多到一定程度，谁都记不住颜色对应哪一类。放在最前面，

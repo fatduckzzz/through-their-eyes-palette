@@ -1,23 +1,21 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>配色可及性检查 · Colour Accessibility Checker</title>
-<meta name="description" content="检查配色与设计图对色觉障碍者是否可及：模拟三种常见色觉、定位塌陷的颜色对、给出修改建议。全部在浏览器本地完成。">
+<title>Palette Tool · Through Their Eyes</title>
+<meta name="description" content="Check a palette or a finished chart for colour-vision deficiency: see it through three kinds of colour vision, find the colour pairs that lose their difference, and get a fix. Everything runs in your browser.">
 <!-- 字体自托管，中文走系统栈：Google Fonts 在中国大陆不可达 -->
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="prism.css?v=1">
 </head>
 <body>
 <canvas id="ambient" aria-hidden="true"></canvas>
 
 <header class="masthead">
   <div class="wrap">
-    <span class="brand">配色可及性检查</span>
-    <div id="langtoggle">
-      <button data-lang="zh" class="on">中文</button>
-      <button data-lang="en">EN</button>
-    </div>
+    <span class="brand">Through Their Eyes <em>· Palette tool</em></span>
+    <a class="back-story" href="https://fatduckzzz.github.io/through-their-eyes/" data-i="story.back"></a>
   </div>
 </header>
 
@@ -50,10 +48,12 @@
 
     <div class="ct-presets">
       <span class="ct-presets-lbl" data-i="ct.presets"></span>
+      <button class="ct-preset" data-ref="Okabe–Ito" data-pal="#E69F00,#56B4E9,#009E73,#F0E442,#0072B2,#D55E00,#CC79A7">Okabe–Ito</button>
+      <button class="ct-preset" data-ref="Tol" data-pal="#4477AA,#EE6677,#228833,#CCBB44,#66CCEE,#AA3377">Tol bright</button>
       <button class="ct-preset" data-ref="IBM" data-pal="#648FFF,#785EF0,#DC267F,#FE6100,#FFB000">IBM</button>
-      <button class="ct-preset" data-ref="Okabe–Ito" data-pal="#000000,#E69F00,#56B4E9,#009E73,#F0E442,#0072B2,#D55E00,#CC79A7">Wong</button>
-      <button class="ct-preset" data-ref="Tol" data-pal="#332288,#117733,#44AA99,#88CCEE,#DDCC77,#CC6677,#AA4499,#882255">Tol</button>
-      <button class="ct-preset" data-pal="#E41A1C,#4DAF4A">Red / Green</button>
+      <button class="ct-preset" data-pal="#4E79A7,#F28E2B,#E15759,#76B7B2,#59A14F,#EDC948,#B07AA1,#FF9DA7,#9C755F,#BAB0AC">Tableau 10</button>
+      <button class="ct-preset" data-pal="#E41A1C,#377EB8,#4DAF4A,#984EA3,#FF7F00,#A65628,#F781BF">ColorBrewer Set1</button>
+      <button class="ct-preset" data-pal="#D72D2D,#3CA03C,#3366CC,#F4B400">Red / green</button>
     </div>
 
     <p class="mono-note" data-i="ct.presets.note"></p>
@@ -93,6 +93,7 @@
 
   <footer class="colophon">
     <p data-i="foot.about"></p>
+    <p class="mono-note">Part of <a href="https://fatduckzzz.github.io/through-their-eyes/">Through Their Eyes</a>, an interactive data story about colour vision deficiency. <a href="https://fatduckzzz.github.io/through-their-eyes/method.html">How the checker was tested</a>.</p>
     <p class="mono-note">
       <a href="https://davidmathlogic.com/colorblind/" target="_blank" rel="noopener">davidmathlogic.com/colorblind</a> ·
       <a href="https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html" target="_blank" rel="noopener">WCAG 2.2 · 1.4.1 Use of Color</a>

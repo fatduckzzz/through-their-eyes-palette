@@ -141,6 +141,7 @@
         var msg=t('ct.check.row')
           .replace('{a}', palette[c.i].toUpperCase())
           .replace('{b}', palette[c.j].toUpperCase())
+          .replace('{sev}', t(c.severity==='high' ? 'sev.high' : 'sev.moderate'))
           .replace('{type}', t('ct.'+c.type))
           .replace('{de}', c.de.toFixed(1));
         head.appendChild(swA); head.appendChild(swB);
@@ -248,7 +249,7 @@
       var lines=[];
       lines.push('Through Their Eyes — '+t('ct.check.title'));
       lines.push('');
-      lines.push((LANG==='zh'?'配色：':'Palette: ')+palette.map(function(h){return h.toUpperCase();}).join(', '));
+      lines.push('Palette: '+palette.map(function(h){return h.toUpperCase();}).join(', '));
       lines.push('');
       var collisions=findCollisions();
       if(collisions.length===0){
