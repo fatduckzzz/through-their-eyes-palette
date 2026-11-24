@@ -36,7 +36,7 @@
     function simulate(hex,type){ return CVD.simulateHex(hex,type); }
 
     /* ---------- accessibility check: collision detection + suggested fix ---------- */
-    var COLLIDE_DE=CVD.TH.SIM_DE_MAX;   // 只给 suggestFix 当搜索目标用
+    var COLLIDE_DE=CVDAnalyse.CONFIG.SIM_DE_MAX;   // 只给 suggestFix 当搜索目标用
     var hex2lab=CVD.hex2lab, deltaE=CVD.deltaE;
     function hex2hsl(hex){
       var rgb=hex2rgb(hex).map(function(v){return v/255;});
@@ -58,30 +58,16 @@
       else if(h<240) rgb=[0,x,c]; else if(h<300) rgb=[x,0,c]; else rgb=[c,0,x];
       return rgb2hex(rgb.map(function(v){ return Math.round((v+m)*255); }));
     }
-    /* 判据与图片检查共用 CVD.judgePair。
-
-       原来这里只卡"模拟后总 ΔE < 12"，漏得很厉害：站上那个
-       "Red / Green"预设按钮里的 #E41A1C / #4DAF4A，三种色觉下最小
-       ΔE 是 21，永远够不到 12，于是配色表对着最经典的红绿撞色显示
-       "没有发现冲突"。换成 judgePair 后它会被报成"只剩明度差"。
-
-       judgePair 一对只出一条（把受影响的色觉类型合并进去），这里
-       展开成每种类型一条，保持原来的渲染逻辑不变。 */
+    /* One rule for the table and the chart checker: pairs.js applies the thresholds from analyse.js
+       to the exact colours in the table (this used to be a stricter rule in cvd.js, so the two halves
+       of the tool gave different answers for the same palette). */
     function findCollisions(){
-      var out=[];
-      for(var i=0;i<palette.length;i++){
-        for(var j=i+1;j<palette.length;j++){
-          var la=CVD.hex2lab(palette[i]), lb=CVD.hex2lab(palette[j]);
-          var sa=CVD.simLabs(CVD.hex2rgb(palette[i])), sb=CVD.simLabs(CVD.hex2rgb(palette[j]));
-          var v=CVD.judgePair(la,lb,sa,sb);
-          if(!v) continue;
-          var ii=i, jj=j, rare=v.rareTypeOnly;
-          v.detail.forEach(function(d){
-            out.push({i:ii,j:jj,type:d.type,de:d.simDE,severity:v.severity,
-                      rare:rare&&d.type==='tritan'});
-          });
-        }
-      }
+      var out=[], r=TTEPairs.analyse(palette);
+      r.findings.forEach(function(v){
+        v.detail.forEach(function(d){
+          out.push({i:v.i,j:v.j,type:d.type,de:d.simDE,severity:v.severity,rare:v.rareTypeOnly&&d.type==='tritan'});
+        });
+      });
       return out;
     }
     // Heuristic search: rotate hue / shift lightness of colour B until it clears the

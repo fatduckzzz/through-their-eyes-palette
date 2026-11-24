@@ -19,7 +19,7 @@ Each flagged pair is graded:
 
 ## The rule
 
-The same rule is used for the palette table and the chart checker (`judgePair()` in `cvd.js`, and `analyse.js`). A pair is flagged for a type of colour vision when:
+The same rule is used for the palette table and the chart checker: `analyse.js` holds the thresholds, and `pairs.js` applies them to the exact colours in the table. A pair is flagged for a type of colour vision when:
 
 | Condition | Threshold |
 | --- | --- |
@@ -52,7 +52,8 @@ python -m http.server 8000
 ```
 index.html      page structure
 i18n.js         English text, t() and fill()
-cvd.js          colour-vision simulation and the shared judgePair() rule
+cvd.js          colour-vision simulation (Brettel 1997) and Lab helpers
+pairs.js        the pair rule on exact colours (thresholds from analyse.js)
 ctool.js        palette table
 analyse.js      chart analysis engine (pure functions)
 app.js          page wiring and result rendering
