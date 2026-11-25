@@ -73,7 +73,32 @@ var I18N = {
     "an.sim.normal": "typical vision",
     "sev.high": "nearly identical",
     "sev.moderate": "harder to tell apart",
-    "story.back": "← The story: Through Their Eyes"
+    "story.back": "← The story: Through Their Eyes",
+    "sum.t.one": "1 colour pair loses much of its difference",
+    "sum.t.many": "{n} colour pairs lose much of their difference",
+    "sum.s": "for at least one type of colour vision",
+    "sum.none.t": "No colour pair loses its difference",
+    "sum.none.s": "It holds up for all three types of colour vision.",
+    "chip.hi": "{n} nearly identical",
+    "chip.mid": "{n} harder to tell apart",
+    "pair.affects": "Affects {types}",
+    "ct.repair.title": "Repair the whole palette",
+    "ct.repair.working": "Working out a repair…",
+    "ct.repair.p": "Changes {n} of {m} colours, by {how}. Fixing one pair at a time can create a new clash, so this looks at all the colours together.",
+    "ct.repair.how1": "lightness alone",
+    "ct.repair.how2": "lightness and saturation",
+    "ct.repair.how3": "lightness, saturation and a little hue",
+    "ct.repair.apply": "Apply repair",
+    "ct.repair.none": "No small change clears every pair. These colours need a second cue: a pattern, a label or a marker shape.",
+    "ct.repair.caveat": "The repair is checked with the same rule that finds the problem. That shows it is consistent with the checker, not that people with colour-vision deficiency have tried it.",
+    "ct.repair.report": "Repair for the whole palette (change {n} of {m} colours, {how}):",
+    "an.repair.p": "Changes {n} of {m} colours, by {how}. Fixing one pair at a time can create a new clash, so this looks at all the colours together. {check}",
+    "an.repair.check0": "Checked again on the repaired image: the checker finds no pair that loses its difference.",
+    "an.repair.check": "Checked again on the repaired image: the checker still finds {k}. (An edge colour can appear once an area is recoloured.)",
+    "an.repair.orig": "Original",
+    "an.repair.rep": "Repaired",
+    "an.repair.dl": "Download repaired image ({w}×{h})",
+    "an.repair.none": "No small change clears every pair. This chart needs a second cue: direct labels, patterns or marker shapes."
   }
 };
 

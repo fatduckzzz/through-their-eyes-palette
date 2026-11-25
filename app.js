@@ -94,7 +94,7 @@
     shownCues = {};
 
     if (!result.findings.length) {
-      statusEl.textContent = t('an.clean');
+      statusEl.innerHTML = TTEUI.summaryHtml(0);
       statusEl.className = 'an-status is-clean';
       addCaveat();
       return;
@@ -102,8 +102,7 @@
 
     statusEl.className = 'an-status is-warn';
     var nHigh = result.findings.filter(function (f) { return f.severity === 'high'; }).length;
-    statusEl.textContent = (result.findings.length === 1 ? '1 colour pair loses' : result.findings.length + ' colour pairs lose') + ' much of its difference for at least one type of colour vision' +
-      (nHigh ? '; ' + nHigh + (nHigh === 1 ? ' becomes' : ' become') + ' nearly identical.' : '; none become nearly identical.');
+    statusEl.innerHTML = TTEUI.summaryHtml(result.findings.length, nHigh);
 
     /* 颜色本身是不是超载了？这跟色觉障碍无关，是更上游的问题：
        类别多到一定程度，谁都记不住颜色对应哪一类。放在最前面，
@@ -121,9 +120,108 @@
       listEl.appendChild(findingRow(f, i + 1));
     });
 
+    addRepair(state);
     addExportButton(state);
     addCopyButton(result);
     addCaveat();
+  }
+
+  /* ---------- repair the chart's colours, all of them at once (repair.js) ----------
+     The checker's old per-pair suggestion moved one colour of one pair and never looked at the others; on the
+     120 test charts 43% of those suggestions made a new clash. The repair changes the colours together, then
+     the repaired image is checked again with the same checker so the page can say what is left. */
+  var REP = TTERepair.make(CVD, CVDAnalyse.CONFIG);
+  function r8(c) { return [Math.max(0, Math.min(255, Math.round(c[0]))), Math.max(0, Math.min(255, Math.round(c[1]))), Math.max(0, Math.min(255, Math.round(c[2])))]; }
+
+  /* every pixel within dE 6 of a moved colour (and nearest to it) gets the same Lab shift as that colour */
+  function recolour(src, w, h, from, to) {
+    var labs = from.map(function (c) { return CVD.rgb2lab(c[0], c[1], c[2]); });
+    var moved = [], dl = [], i;
+    for (i = 0; i < from.length; i++) {
+      var nl = CVD.rgb2lab(to[i][0], to[i][1], to[i][2]);
+      moved[i] = CVD.deltaE(labs[i], nl) > 0.5;
+      dl[i] = [nl[0] - labs[i][0], nl[1] - labs[i][1], nl[2] - labs[i][2]];
+    }
+    var out = new ImageData(new Uint8ClampedArray(src.data), w, h), d = out.data, cache = {};
+    for (var p = 0; p < d.length; p += 4) {
+      var r = d[p], g = d[p + 1], b = d[p + 2], key = (r << 16) | (g << 8) | b, res = cache[key];
+      if (res === undefined) {
+        var pl = CVD.rgb2lab(r, g, b), bi = -1, bd = 1e9;
+        for (i = 0; i < labs.length; i++) { var dd = CVD.deltaE(pl, labs[i]); if (dd < bd) { bd = dd; bi = i; } }
+        if (bi >= 0 && moved[bi] && bd <= 6) res = r8(CVD.lab2rgb(pl[0] + dl[bi][0], pl[1] + dl[bi][1], pl[2] + dl[bi][2])); else res = null;
+        cache[key] = res;
+      }
+      if (res) { d[p] = res[0]; d[p + 1] = res[1]; d[p + 2] = res[2]; }
+    }
+    return out;
+  }
+
+  function addRepair(state) {
+    var res = state.result, cols = res.colours, inF = {};
+    res.findings.forEach(function (f) { inF[f.hexA] = 1; inF[f.hexB] = 1; });
+    var idx = [];
+    cols.forEach(function (c, i) {
+      var l = CVD.rgb2lab(c.rgb[0], c.rgb[1], c.rgb[2]);
+      if (inF[c.hex] || Math.sqrt(l[1] * l[1] + l[2] * l[2]) > 18) idx.push(i);
+    });
+    var head = '<div class="ct-repair-k">' + TTEUI.esc(t('ct.repair.title')) + '</div>';
+    var box = document.createElement('div');
+    box.className = 'ct-repair an-repair';
+    box.innerHTML = head + '<p class="ct-repair-p">' + TTEUI.esc(t('ct.repair.working')) + '</p>';
+    listEl.appendChild(box);
+
+    setTimeout(function () {
+      if (!document.body.contains(box)) return;
+      var rep = REP.repair(idx.map(function (i) { return cols[i].rgb; }));
+      if (rep.stage <= 0 || rep.remaining > 0) {
+        box.innerHTML = head + '<p class="ct-repair-p">' + TTEUI.esc(t('an.repair.none')) + '</p>';
+        return;
+      }
+      var from = cols.map(function (c) { return c.rgb; });
+      var to = cols.map(function (c) { return c.rgb.slice(); });
+      idx.forEach(function (ci, k) { to[ci] = r8(rep.colours[k]); });
+      var rimg = recolour(state.imageData, state.w, state.h, from, to);
+      var again = CVDAnalyse.run(rimg, state.w, state.h, []).findings.length;
+      state.repaired = { img: rimg, from: from, to: to };
+
+      var how = t('ct.repair.how' + (rep.stage >= 1 && rep.stage <= 3 ? rep.stage : 1));
+      var check = again === 0 ? t('an.repair.check0') : fill(t('an.repair.check'), { k: again === 1 ? '1 pair' : again + ' pairs' });
+      var h = head + '<p class="ct-repair-p">' + TTEUI.esc(fill(t('an.repair.p'), { n: rep.moved.length, m: idx.length, how: how, check: check })) + '</p><div class="ct-repair-sw">';
+      rep.moved.forEach(function (k) {
+        var o = cols[idx[k]].hex, n = CVDAnalyse.rgb2hex(r8(rep.colours[k]));
+        h += '<span class="ct-chg"><i style="background:' + o + '"></i><em aria-hidden="true">\u2192</em><i style="background:' + n + '"></i><span class="ct-chg-hex">' + o + ' \u2192 ' + n + '</span></span>';
+      });
+      h += '</div><div class="ct-toggle" role="group" aria-label="' + TTEUI.esc(t('ct.repair.title')) + '">' +
+        '<button type="button" class="wchip" data-show="orig" aria-pressed="true">' + TTEUI.esc(t('an.repair.orig')) + '</button>' +
+        '<button type="button" class="wchip" data-show="rep" aria-pressed="false">' + TTEUI.esc(t('an.repair.rep')) + '</button></div>' +
+        '<button type="button" class="btn ghost ct-dl"></button>' +
+        '<p class="mono-note ct-repair-caveat">' + TTEUI.esc(t('ct.repair.caveat')) + '</p>';
+      box.innerHTML = h;
+
+      var src = state.source, big = src.naturalWidth * src.naturalHeight > 12e6;
+      var W = big ? state.w : src.naturalWidth, H = big ? state.h : src.naturalHeight;
+      box.querySelector('.ct-dl').textContent = fill(t('an.repair.dl'), { w: W, h: H });
+      box.querySelector('.ct-dl').addEventListener('click', function () { downloadRepaired(state, W, H); });
+      box.querySelector('.ct-toggle').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-show]'); if (!b) return;
+        var show = b.getAttribute('data-show'), ctx = canvas.getContext('2d');
+        [].forEach.call(box.querySelectorAll('[data-show]'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+        if (show === 'rep') ctx.putImageData(state.repaired.img, 0, 0);
+        else { ctx.putImageData(state.imageData, 0, 0); drawMarkers(ctx, state.result.findings, 1); }
+      });
+    }, 30);
+  }
+
+  function downloadRepaired(state, W, H) {
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var x = c.getContext('2d'); x.drawImage(state.source, 0, 0, W, H);
+    x.putImageData(recolour(x.getImageData(0, 0, W, H), W, H, state.repaired.from, state.repaired.to), 0, 0);
+    c.toBlob(function (blob) {
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = 'cvd-repaired.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }, 'image/png');
   }
 
   /* 把结果拼成一段文字复制走。

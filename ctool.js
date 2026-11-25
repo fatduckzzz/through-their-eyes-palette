@@ -36,125 +36,57 @@
     function simulate(hex,type){ return CVD.simulateHex(hex,type); }
 
     /* ---------- accessibility check: collision detection + suggested fix ---------- */
-    var COLLIDE_DE=CVDAnalyse.CONFIG.SIM_DE_MAX;   // 只给 suggestFix 当搜索目标用
     var hex2lab=CVD.hex2lab, deltaE=CVD.deltaE;
-    function hex2hsl(hex){
-      var rgb=hex2rgb(hex).map(function(v){return v/255;});
-      var max=Math.max.apply(null,rgb), min=Math.min.apply(null,rgb);
-      var l=(max+min)/2, d=max-min, h=0, s=0;
-      if(d!==0){
-        s=d/(1-Math.abs(2*l-1));
-        if(max===rgb[0]) h=60*(((rgb[1]-rgb[2])/d)%6);
-        else if(max===rgb[1]) h=60*((rgb[2]-rgb[0])/d+2);
-        else h=60*((rgb[0]-rgb[1])/d+4);
-      }
-      if(h<0) h+=360;
-      return [h,s,l];
-    }
-    function hsl2hex(h,s,l){
-      h=((h%360)+360)%360; s=Math.max(0,Math.min(1,s)); l=Math.max(0,Math.min(1,l));
-      var c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2, rgb;
-      if(h<60) rgb=[c,x,0]; else if(h<120) rgb=[x,c,0]; else if(h<180) rgb=[0,c,x];
-      else if(h<240) rgb=[0,x,c]; else if(h<300) rgb=[x,0,c]; else rgb=[c,0,x];
-      return rgb2hex(rgb.map(function(v){ return Math.round((v+m)*255); }));
-    }
     /* One rule for the table and the chart checker: pairs.js applies the thresholds from analyse.js
-       to the exact colours in the table (this used to be a stricter rule in cvd.js, so the two halves
-       of the tool gave different answers for the same palette). */
-    function findCollisions(){
-      var out=[], r=TTEPairs.analyse(palette);
-      r.findings.forEach(function(v){
-        v.detail.forEach(function(d){
-          out.push({i:v.i,j:v.j,type:d.type,de:d.simDE,severity:v.severity,rare:v.rareTypeOnly&&d.type==='tritan'});
-        });
-      });
-      return out;
+       to the exact colours in the table. */
+
+    /* ---------- repair: change the whole palette at once ----------
+       The old per-pair suggestion moved one colour of one pair and never looked at the rest; on 120 test charts
+       43% of such suggestions created a new clash. repair.js changes the colours of the whole palette together. */
+    var REP=TTERepair.make(CVD,CVDAnalyse.CONFIG), repTimer=null;
+    function clamp8(v){ return Math.max(0,Math.min(255,Math.round(v))); }
+    function paletteRepair(){
+      var r=REP.repair(palette.map(hex2rgb));
+      return { stage:r.stage, remaining:r.remaining, moved:r.moved,
+               colours:r.colours.map(function(c){ return rgb2hex(c.map(clamp8)); }) };
     }
-    // Heuristic search: rotate hue / shift lightness of colour B until it clears the
-    // collision threshold under the given CVD type, while staying as close as possible
-    // (true-colour ΔE) to the original B. Not a global optimum — a bounded grid search.
-    function suggestFix(hexB,hexA,type){
-      var hsl=hex2hsl(hexB);
-      var labA=hex2lab(simulate(hexA,type));
-      var labOrigB=hex2lab(hexB);
-      var hueSteps=[0,20,-20,40,-40,60,-60,90,-90,120,-120,150,-150,180];
-      var lSteps=[0,0.12,-0.12,0.22,-0.22,-0.32,0.32];
-      var best=null, bestDist=Infinity;
-      hueSteps.forEach(function(dh){
-        lSteps.forEach(function(dl){
-          var cand=hsl2hex(hsl[0]+dh, hsl[1], hsl[2]+dl);
-          var deSim=deltaE(hex2lab(simulate(cand,type)),labA);
-          if(deSim>=COLLIDE_DE+3){
-            var deOrig=deltaE(hex2lab(cand),labOrigB);
-            if(deOrig<bestDist){ bestDist=deOrig; best=cand; }
-          }
-        });
-      });
-      return best;
-    }
+    function howText(stage){ return t('ct.repair.how'+(stage>=1&&stage<=3?stage:1)); }
+
     function renderCheck(){
       var el=document.getElementById('ctCheck'); if(!el) return;
+      clearTimeout(repTimer);
       el.innerHTML='';
       /* 改一个颜色整张表会重画，结论也跟着变。没有 live region 的话
          读屏用户改完不会知道结果变了。 */
       el.setAttribute('role','status');
       el.setAttribute('aria-live','polite');
       el.setAttribute('aria-label',t('ct.a11y.results'));
-      var collisions=findCollisions();
-      var common=collisions.filter(function(c){return !c.rare;});
-      var rare=collisions.filter(function(c){return c.rare;});
+      var F=TTEPairs.analyse(palette).findings;
+      var common=F.filter(function(v){return !v.rareTypeOnly;});
+      var rare=F.filter(function(v){return v.rareTypeOnly;});
 
-      if(collisions.length===0){
+      if(F.length===0){
         var ok=document.createElement('div'); ok.className='ct-check-ok';
         ok.textContent=t('ct.check.ok');
         el.appendChild(ok);
         return;
       }
 
-      var title=document.createElement('div'); title.className='ct-check-title'; title.textContent=t('ct.check.title');
-      el.appendChild(title);
+      var head=document.createElement('div'); head.className='ct-found';
+      head.innerHTML=TTEUI.summaryHtml(F.length, F.filter(function(v){return v.severity==='high';}).length);
+      el.appendChild(head);
       if(activeRef){
         var refnote=document.createElement('div'); refnote.className='ct-check-refnote';
         refnote.textContent=fill(t('ct.check.refnote'),{name:activeRef});
         el.appendChild(refnote);
       }
 
-      function warnRow(c){
-        var row=document.createElement('div'); row.className='ct-warn';
-        var head=document.createElement('div'); head.className='ct-warn-head';
-        var swA=document.createElement('span'); swA.className='sw'; swA.style.background=palette[c.i];
-        var swB=document.createElement('span'); swB.className='sw'; swB.style.background=palette[c.j];
-        var msg=t('ct.check.row')
-          .replace('{a}', palette[c.i].toUpperCase())
-          .replace('{b}', palette[c.j].toUpperCase())
-          .replace('{sev}', t(c.severity==='high' ? 'sev.high' : 'sev.moderate'))
-          .replace('{type}', t('ct.'+c.type))
-          .replace('{de}', c.de.toFixed(1));
-        head.appendChild(swA); head.appendChild(swB);
-        var txt=document.createElement('span'); txt.textContent=msg;
-        head.appendChild(txt);
-        row.appendChild(head);
-
-        var fix=suggestFix(palette[c.j], palette[c.i], c.type);
-        var fixRow=document.createElement('div'); fixRow.className='ct-warn-fix';
-        if(fix){
-          var swOld=document.createElement('span'); swOld.className='sw'; swOld.style.background=palette[c.j];
-          var arrow=document.createElement('span'); arrow.textContent='→';
-          var swNew=document.createElement('span'); swNew.className='sw'; swNew.style.background=fix;
-          var suggestTxt=document.createElement('span');
-          suggestTxt.textContent=t('ct.check.suggest').replace('{b}', palette[c.j].toUpperCase()).replace('{new}', fix.toUpperCase());
-          var applyBtn=document.createElement('button'); applyBtn.className='ct-fixbtn'; applyBtn.textContent=t('ct.check.apply');
-          (function(jIdx,newHex){
-            applyBtn.addEventListener('click',function(){ palette[jIdx]=newHex; activeRef=null; render(); });
-          })(c.j, fix);
-          fixRow.appendChild(swOld); fixRow.appendChild(arrow); fixRow.appendChild(swNew);
-          fixRow.appendChild(suggestTxt); fixRow.appendChild(applyBtn);
-        } else {
-          var noFix=document.createElement('span'); noFix.textContent=t('ct.check.nofix');
-          fixRow.appendChild(noFix);
-        }
-        row.appendChild(fixRow);
-        return row;
+      function list(items){
+        var ul=document.createElement('ul'); ul.className='ct-pairs';
+        ul.innerHTML=items.map(function(v){
+          return TTEUI.pairRow({a:palette[v.i],b:palette[v.j],i:v.i,j:v.j,severity:v.severity,types:v.types,de:v.simDE});
+        }).join('');
+        return ul;
       }
 
       /* 红绿两型的问题(约占男性 8.5%)：正常展示。一条都没有就先说
@@ -163,20 +95,41 @@
         var okc=document.createElement('div'); okc.className='ct-check-ok';
         okc.textContent=t('ct.check.okcommon');
         el.appendChild(okc);
-      } else {
-        common.forEach(function(c){ el.appendChild(warnRow(c)); });
-      }
+      } else el.appendChild(list(common));
 
       /* 只在蓝黄色盲下才塌的对(约万分之一)：单独一组，放后面。 */
       if(rare.length){
         var rh=document.createElement('div'); rh.className='ct-check-subhead';
         rh.textContent=fill(t('ct.check.tritanhead'),{n:rare.length});
         el.appendChild(rh);
-        rare.forEach(function(c){ el.appendChild(warnRow(c)); });
+        el.appendChild(list(rare));
       }
+
+      var box=document.createElement('div'); box.className='ct-repair';
+      box.innerHTML='<div class="ct-repair-k">'+TTEUI.esc(t('ct.repair.title'))+'</div><p class="ct-repair-p">'+TTEUI.esc(t('ct.repair.working'))+'</p>';
+      el.appendChild(box);
+      /* the search takes a moment; wait until the colour picker stops moving */
+      repTimer=setTimeout(function(){ fillRepair(box); },160);
+    }
+    function fillRepair(box){
+      if(!document.body.contains(box)) return;
+      var rep=paletteRepair(), h='<div class="ct-repair-k">'+TTEUI.esc(t('ct.repair.title'))+'</div>';
+      if(rep.stage<=0 || rep.remaining>0){
+        box.innerHTML=h+'<p class="ct-repair-p">'+TTEUI.esc(t('ct.repair.none'))+'</p>';
+        return;
+      }
+      h+='<p class="ct-repair-p">'+TTEUI.esc(fill(t('ct.repair.p'),{n:rep.moved.length,m:palette.length,how:howText(rep.stage)}))+'</p><div class="ct-repair-sw">';
+      rep.moved.forEach(function(k){
+        h+='<span class="ct-chg"><b>'+(k+1)+'</b><i style="background:'+palette[k]+'"></i><em aria-hidden="true">\u2192</em><i style="background:'+rep.colours[k]+'"></i>'+
+           '<span class="ct-chg-hex">'+palette[k].toUpperCase()+' \u2192 '+rep.colours[k].toUpperCase()+'</span></span>';
+      });
+      h+='</div><button type="button" class="btn ct-apply">'+TTEUI.esc(t('ct.repair.apply'))+'</button><p class="mono-note ct-repair-caveat">'+TTEUI.esc(t('ct.repair.caveat'))+'</p>';
+      box.innerHTML=h;
+      box.querySelector('.ct-apply').addEventListener('click',function(){ palette=rep.colours.slice(); activeRef=null; render(); });
     }
 
     function render(){
+      if(typeof paintPresets==='function') paintPresets(null);
       rowsEl.innerHTML='';
       palette.forEach(function(hex,idx){
         var HEX=hex.toUpperCase(), N=idx+1;
@@ -222,11 +175,14 @@
       activeRef=null; render();
     });
     document.getElementById('ctReset').addEventListener('click',function(){palette=DEFAULT.slice();activeRef=null;render();});
-    document.querySelectorAll('.ct-preset').forEach(function(b){
+    var presetBtns=document.querySelectorAll('.ct-preset');
+    function paintPresets(active){ presetBtns.forEach(function(x){ x.setAttribute('aria-pressed',String(x===active)); }); }
+    presetBtns.forEach(function(b){
+      b.setAttribute('aria-pressed','false');
       b.addEventListener('click',function(){
         palette=b.getAttribute('data-pal').split(',');
         activeRef=b.getAttribute('data-ref')||null;   // 只有 IBM/Wong/Tol 带 data-ref
-        render();
+        render(); paintPresets(b);
       });
     });
 
@@ -237,27 +193,27 @@
       lines.push('');
       lines.push('Palette: '+palette.map(function(h){return h.toUpperCase();}).join(', '));
       lines.push('');
-      var collisions=findCollisions();
-      if(collisions.length===0){
+      var F=TTEPairs.analyse(palette).findings;
+      if(F.length===0){
         lines.push(t('ct.check.ok'));
       } else {
         if(activeRef){ lines.push(fill(t('ct.check.refnote'),{name:activeRef})); lines.push(''); }
-        var xcommon=collisions.filter(function(c){return !c.rare;});
-        var xrare=collisions.filter(function(c){return c.rare;});
+        var xcommon=F.filter(function(v){return !v.rareTypeOnly;});
+        var xrare=F.filter(function(v){return v.rareTypeOnly;});
         if(xcommon.length===0) lines.push(t('ct.check.okcommon'));
-        function reportRow(c){
-          lines.push('- '+t('ct.check.row')
-            .replace('{a}', palette[c.i].toUpperCase())
-            .replace('{b}', palette[c.j].toUpperCase())
-            .replace('{type}', t('ct.'+c.type))
-            .replace('{de}', c.de.toFixed(1)));
-          var fix=suggestFix(palette[c.j], palette[c.i], c.type);
-          lines.push('  '+(fix
-            ? t('ct.check.suggest').replace('{b}', palette[c.j].toUpperCase()).replace('{new}', fix.toUpperCase())
-            : t('ct.check.nofix')));
+        function reportRow(v){
+          lines.push('- #'+(v.i+1)+' and #'+(v.j+1)+' ('+palette[v.i].toUpperCase()+' / '+palette[v.j].toUpperCase()+'): '+
+            v.types.map(function(x){return t('ct.'+x);}).join(' / ')+', '+t(v.severity==='high'?'sev.high':'sev.moderate')+' (\u0394E \u2248 '+v.simDE.toFixed(1)+')');
         }
         xcommon.forEach(reportRow);
         if(xrare.length){ lines.push(''); lines.push(fill(t('ct.check.tritanhead'),{n:xrare.length})); xrare.forEach(reportRow); }
+        var rep=paletteRepair();
+        lines.push('');
+        if(rep.stage>0 && rep.remaining===0){
+          lines.push(fill(t('ct.repair.report'),{n:rep.moved.length,m:palette.length,how:howText(rep.stage)}));
+          rep.moved.forEach(function(k){ lines.push('  #'+(k+1)+': '+palette[k].toUpperCase()+' -> '+rep.colours[k].toUpperCase()); });
+          lines.push('  '+t('ct.repair.caveat'));
+        } else lines.push(t('ct.repair.none'));
       }
       var blob=new Blob([lines.join('\n')], {type:'text/plain'});
       var url=URL.createObjectURL(blob);

@@ -4,13 +4,15 @@ The standalone palette and chart checker from [Through Their Eyes](https://fatdu
 
 Live: https://fatduckzzz.github.io/through-their-eyes-palette/
 
-The story has a guided version of this tool (four short acts: see, fix, add a cue, your turn). This repository is the **full tool**: the same checker, wording and look, plus per-pair fix suggestions, an annotated image and a report export.
+The story has a guided version of this tool (four short acts: see, fix, add a cue, your turn). This repository is the **full tool**: the same checker, wording and look, plus a palette-level repair, an annotated image and a report export.
 
 ## What it does
 
-**Palette table.** Add colours or start from a known palette (Okabe–Ito, Tol bright, IBM, Tableau 10, ColorBrewer Set1, red/green). See each colour under protanopia, deuteranopia and tritanopia, find the pairs that lose their difference, and apply a suggested fix.
+**Palette table.** Add colours or start from a known palette (Okabe–Ito, Tol bright, IBM, Tableau 10, ColorBrewer Set1, red/green). See each colour under protanopia, deuteranopia and tritanopia, find the pairs that lose their difference, and apply a repair for the whole palette.
 
-**Chart checker.** Upload a chart, slide or screenshot. The tool finds the main colours used for categories, shows which two colours lose their difference for which type of colour vision, where on the image they meet, and suggests a fix or a second cue (labels, dashes, markers).
+**Chart checker.** Upload a chart, slide or screenshot. The tool finds the main colours used for categories, shows which two colours lose their difference for which type of colour vision, where on the image they meet, and offers a repair for the whole set of colours. You can flip between the original and the repaired chart, and download the repaired image. When no small change works it says so and points to a second cue (labels, dashes, markers).
+
+**Repair.** `repair.js` changes the colours that sit in a flagged pair *together*, so that no pair is flagged by the rule below and no two colours end up too close in typical vision. It tries lightness alone first, then lightness and saturation, then a little hue. This replaces the earlier one-pair-at-a-time suggestion, which on 120 test charts created a new clash in 43% of cases. On the 51 flagged test charts, recolouring the image and running the same checker again left no flagged pair in 45 (88%), against 20 (39%) for the old suggestions. That is the checker grading its own repair; it has not been tested with people who have colour-vision deficiency, and lightness-only changes can fight a chart's meaning (for example a sequential scale). These numbers are exploratory.
 
 Each flagged pair is graded:
 
@@ -54,11 +56,13 @@ index.html      page structure
 i18n.js         English text, t() and fill()
 cvd.js          colour-vision simulation (Brettel 1997) and Lab helpers
 pairs.js        the pair rule on exact colours (thresholds from analyse.js)
+repair.js       palette-level repair (new; does not touch analyse.js)
+ui.js           result summary and pair rows
 ctool.js        palette table
 analyse.js      chart analysis engine (pure functions)
 app.js          page wiring and result rendering
 style.css       base layout
-prism.css       the story's look (fonts, glow, glass panels)
+prism.css       the story's look: fonts, glow, glass cards, pill chips, shaped severity markers
 ```
 
 `cvd.js` and `analyse.js` are byte-identical to the copies in the story repository. If you change a threshold, change both places and say so.
