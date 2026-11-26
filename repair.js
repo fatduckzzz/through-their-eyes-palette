@@ -25,7 +25,6 @@ var TTERepair = (function () {
     function info(rgb) {
       var key = rgb[0] + ',' + rgb[1] + ',' + rgb[2], v = cache[key];
       if (!v) {
-        if (cacheN > 30000) { cache = {}; cacheN = 0; }   /* memo only; keeps a long browser session bounded */
         cacheN++;
         v = { rgb: rgb, lab: CVD.rgb2lab(rgb[0], rgb[1], rgb[2]), sim: [] };
         for (var i = 0; i < 3; i++) { var s = CVD.simulate(rgb, TYPES[i]); v.sim.push(CVD.rgb2lab(s[0], s[1], s[2])); }
@@ -138,6 +137,7 @@ var TTERepair = (function () {
     function repair(colours, opts) {
       opts = opts || {};
       var maxStage = opts.maxStage || 3, restarts = opts.restarts || 5, n = colours.length;
+      if (cacheN > 30000) { cache = {}; cacheN = 0; }   /* memo only, and only between runs, so a run never changes halfway; keeps a long browser session bounded */
       var origI = colours.map(info), P = origStats(origI), before = counts(origI, P);
       if (before.h === 0) return { colours: colours, moved: [], stage: 0, remaining: 0, soft: before.s, softBefore: before.s, shifts: [] };
       var inPair = {};
