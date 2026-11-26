@@ -52,6 +52,13 @@
     }
     function howText(stage){ return t('ct.repair.how'+(stage>=1&&stage<=3?stage:1)); }
 
+    /* the heads-up tier: pairs that only lightness keeps apart (outside the audited rule, same definition as the story) */
+    function softList(F){
+      var hard={}; F.forEach(function(v){ hard[v.i+','+v.j]=1; });
+      return REP.softPairs(palette.map(hex2rgb)).filter(function(p){ return !hard[p.i+','+p.j]; })
+        .sort(function(p,q){ return p.light-q.light; });
+    }
+
     function renderCheck(){
       var el=document.getElementById('ctCheck'); if(!el) return;
       clearTimeout(repTimer);
@@ -61,11 +68,11 @@
       el.setAttribute('role','status');
       el.setAttribute('aria-live','polite');
       el.setAttribute('aria-label',t('ct.a11y.results'));
-      var F=TTEPairs.analyse(palette).findings;
+      var F=TTEPairs.analyse(palette).findings, soft=softList(F);
       var common=F.filter(function(v){return !v.rareTypeOnly;});
       var rare=F.filter(function(v){return v.rareTypeOnly;});
 
-      if(F.length===0){
+      if(F.length===0 && soft.length===0){
         var ok=document.createElement('div'); ok.className='ct-check-ok';
         ok.textContent=t('ct.check.ok');
         el.appendChild(ok);
@@ -73,7 +80,7 @@
       }
 
       var head=document.createElement('div'); head.className='ct-found';
-      head.innerHTML=TTEUI.summaryHtml(F.length, F.filter(function(v){return v.severity==='high';}).length);
+      head.innerHTML=TTEUI.summaryHtml(F.length, F.filter(function(v){return v.severity==='high';}).length, soft.length);
       el.appendChild(head);
       if(activeRef){
         var refnote=document.createElement('div'); refnote.className='ct-check-refnote';
@@ -84,32 +91,42 @@
       function list(items){
         var ul=document.createElement('ul'); ul.className='ct-pairs';
         ul.innerHTML=items.map(function(v){
-          return TTEUI.pairRow({a:palette[v.i],b:palette[v.j],i:v.i,j:v.j,severity:v.severity,types:v.types,de:v.simDE});
+          return TTEUI.pairRow({a:palette[v.i],b:palette[v.j],i:v.i,j:v.j,severity:v.severity||'soft',types:v.types,de:v.simDE});
         }).join('');
         return ul;
       }
 
-      /* 红绿两型的问题(约占男性 8.5%)：正常展示。一条都没有就先说
-         "常见的两型下没问题"。 */
-      if(common.length===0){
-        var okc=document.createElement('div'); okc.className='ct-check-ok';
-        okc.textContent=t('ct.check.okcommon');
-        el.appendChild(okc);
-      } else el.appendChild(list(common));
+      if(F.length){
+        /* 红绿两型的问题(约占男性 8.5%)：正常展示。一条都没有就先说
+           "常见的两型下没问题"。 */
+        if(common.length===0){
+          var okc=document.createElement('div'); okc.className='ct-check-ok';
+          okc.textContent=t('ct.check.okcommon');
+          el.appendChild(okc);
+        } else el.appendChild(list(common));
 
-      /* 只在蓝黄色盲下才塌的对(约万分之一)：单独一组，放后面。 */
-      if(rare.length){
-        var rh=document.createElement('div'); rh.className='ct-check-subhead';
-        rh.textContent=fill(t('ct.check.tritanhead'),{n:rare.length});
-        el.appendChild(rh);
-        el.appendChild(list(rare));
+        /* 只在蓝黄色盲下才塌的对(约万分之一)：单独一组，放后面。 */
+        if(rare.length){
+          var rh=document.createElement('div'); rh.className='ct-check-subhead';
+          rh.textContent=fill(t('ct.check.tritanhead'),{n:rare.length});
+          el.appendChild(rh);
+          el.appendChild(list(rare));
+        }
+      }
+      if(soft.length){
+        var sh=document.createElement('div'); sh.className='ct-check-subhead';
+        sh.textContent=t('ct.soft.head');
+        el.appendChild(sh);
+        el.appendChild(list(soft.map(function(p){ return {i:p.i,j:p.j,types:p.types,severity:'soft'}; })));
       }
 
-      var box=document.createElement('div'); box.className='ct-repair';
-      box.innerHTML='<div class="ct-repair-k">'+TTEUI.esc(t('ct.repair.title'))+'</div><p class="ct-repair-p">'+TTEUI.esc(t('ct.repair.working'))+'</p>';
-      el.appendChild(box);
-      /* the search takes a moment; wait until the colour picker stops moving */
-      repTimer=setTimeout(function(){ fillRepair(box); },160);
+      if(F.length){
+        var box=document.createElement('div'); box.className='ct-repair';
+        box.innerHTML='<div class="ct-repair-k">'+TTEUI.esc(t('ct.repair.title'))+'</div><p class="ct-repair-p">'+TTEUI.esc(t('ct.repair.working'))+'</p>';
+        el.appendChild(box);
+        /* the search takes a moment; wait until the colour picker stops moving */
+        repTimer=setTimeout(function(){ fillRepair(box); },160);
+      }
     }
     function fillRepair(box){
       if(!document.body.contains(box)) return;
@@ -123,13 +140,62 @@
         h+='<span class="ct-chg"><b>'+(k+1)+'</b><i style="background:'+palette[k]+'"></i><em aria-hidden="true">\u2192</em><i style="background:'+rep.colours[k]+'"></i>'+
            '<span class="ct-chg-hex">'+palette[k].toUpperCase()+' \u2192 '+rep.colours[k].toUpperCase()+'</span></span>';
       });
-      h+='</div><button type="button" class="btn ct-apply">'+TTEUI.esc(t('ct.repair.apply'))+'</button><p class="mono-note ct-repair-caveat">'+TTEUI.esc(t('ct.repair.caveat'))+'</p>';
+      h+='</div>';
+      if(rep.soft>0) h+='<p class="ct-repair-p ct-repair-left">'+TTEUI.esc(fill(t('ct.repair.softleft'),{n:rep.soft}))+'</p>';
+      h+='<button type="button" class="btn ct-apply">'+TTEUI.esc(t('ct.repair.apply'))+'</button><p class="mono-note ct-repair-caveat">'+TTEUI.esc(t('ct.repair.caveat'))+'</p>';
       box.innerHTML=h;
       box.querySelector('.ct-apply').addEventListener('click',function(){ palette=rep.colours.slice(); activeRef=null; render(); });
     }
 
+    /* ---------- second cue: a pattern on every colour, and a small chart drawn with the palette ---------- */
+    var fixOn=false, demoEye='normal';
+    var PATCSS=[
+      'repeating-linear-gradient(45deg,rgba(0,0,0,.62) 0 3px,transparent 3px 8px)',
+      'radial-gradient(rgba(0,0,0,.65) 22%,transparent 24%) 0 0/9px 9px',
+      'linear-gradient(rgba(0,0,0,.6) 2px,transparent 2px) 0 0/9px 9px,linear-gradient(90deg,rgba(0,0,0,.6) 2px,transparent 2px) 0 0/9px 9px',
+      'repeating-linear-gradient(90deg,rgba(0,0,0,.6) 0 3px,transparent 3px 8px)',
+      'repeating-linear-gradient(-45deg,rgba(0,0,0,.62) 0 3px,transparent 3px 8px)',
+      'repeating-linear-gradient(0deg,rgba(0,0,0,.6) 0 3px,transparent 3px 8px)'
+    ];
+    function patEl(i){ var p=document.createElement('i'); p.className='ct-pat'; p.setAttribute('aria-hidden','true'); p.style.background=PATCSS[i%PATCSS.length]; return p; }
+    function drawDemo(){
+      var svg=document.getElementById('ctDemo'); if(!svg) return;
+      var w=560,h=190,n=palette.length,gw=(w-40)/n,bw=Math.min(46,gw-10),vals=[6,9,5,8,4,7,3,6,5,8],s='';
+      s+='<defs>'+
+        '<pattern id="tp-0" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#0c0c10" stroke-width="3"/></pattern>'+
+        '<pattern id="tp-1" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="4.5" cy="4.5" r="2" fill="#0c0c10"/></pattern>'+
+        '<pattern id="tp-2" width="9" height="9" patternUnits="userSpaceOnUse"><path d="M0 0H9M0 0V9" stroke="#0c0c10" stroke-width="2" fill="none"/></pattern>'+
+        '<pattern id="tp-3" width="8" height="8" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" stroke="#0c0c10" stroke-width="3"/></pattern>'+
+        '<pattern id="tp-4" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#0c0c10" stroke-width="3"/></pattern>'+
+        '<pattern id="tp-5" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="0" y1="3.5" x2="7" y2="3.5" stroke="#0c0c10" stroke-width="2.6"/></pattern></defs>';
+      s+='<line x1="20" x2="'+(w-20)+'" y1="150" y2="150" stroke="rgba(255,255,255,.4)"/>';
+      palette.forEach(function(hex,i){
+        var bh=vals[i%vals.length]*12,x=20+gw*i+(gw-bw)/2,y=150-bh,col=demoEye==='normal'?hex:simulate(hex,demoEye);
+        s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+col+'"/>';
+        if(fixOn) s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="url(#tp-'+(i%6)+')" opacity=".9"/>';
+        s+='<text x="'+(x+bw/2)+'" y="'+(y-6)+'" text-anchor="middle" class="val">'+vals[i%vals.length]+'</text>';
+        s+='<text x="'+(x+bw/2)+'" y="170" text-anchor="middle">'+(i+1)+'</text>';
+      });
+      svg.setAttribute('viewBox','0 0 '+w+' '+h); svg.setAttribute('aria-label',t('ct.demo.alt')); svg.innerHTML=s;
+      var cap=document.getElementById('ctDemoCap');
+      if(cap) cap.textContent=fill(t('ct.demo.cap'),{eye:t(demoEye==='normal'?'ct.eye.normal':'ct.'+demoEye)});
+    }
+    (function(){
+      var cb=document.getElementById('ctFix');
+      if(cb) cb.addEventListener('change',function(){ fixOn=cb.checked; render(); });
+      document.querySelectorAll('[data-demo-eye]').forEach(function(b){
+        b.addEventListener('click',function(){
+          demoEye=b.getAttribute('data-demo-eye');
+          document.querySelectorAll('[data-demo-eye]').forEach(function(x){ x.setAttribute('aria-pressed',String(x===b)); });
+          drawDemo();
+        });
+      });
+    })();
+
     function render(){
       if(typeof paintPresets==='function') paintPresets(null);
+      rowsEl.parentNode.classList.toggle('fix-on',fixOn);
+      document.getElementById('ctool').classList.toggle('fix-on',fixOn);
       rowsEl.innerHTML='';
       palette.forEach(function(hex,idx){
         var HEX=hex.toUpperCase(), N=idx+1;
@@ -145,6 +211,7 @@
         inp.setAttribute('aria-label',fill(t('ct.a11y.swatch'),{n:N,hex:HEX}));
         inp.addEventListener('input',function(){palette[idx]=inp.value;activeRef=null;render();});
         swatchTrue.appendChild(inp);
+        if(fixOn) swatchTrue.appendChild(patEl(idx));
         var code=document.createElement('span'); code.className='ct-code'; code.textContent=HEX;
         swatchTrue.appendChild(code);
         if(palette.length>2){
@@ -163,11 +230,13 @@
              非视觉用户等于空白。给每格一个名字。 */
           c.setAttribute('role','img');
           c.setAttribute('aria-label',fill(t('ct.a11y.cell'),{hex:sim.toUpperCase(),type:t('ct.'+tp)}));
+          if(fixOn) c.appendChild(patEl(idx));
           row.appendChild(c);
         });
         rowsEl.appendChild(row);
       });
       renderCheck();
+      drawDemo();
     }
     document.getElementById('ctAdd').addEventListener('click',function(){
       if(palette.length>=8)return;

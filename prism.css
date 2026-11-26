@@ -139,4 +139,46 @@ h2{font-weight:300}
 #ctool .ct-img-panel{background:var(--glass),var(--card);border-color:var(--glass-b)}
 .an-row-types,.an-cue-h,.an-sim span,#ctool .ct-img-panel-lbl{font-family:var(--mono)}
 
+/* heads-up tier: pairs only lightness keeps apart (outside the audited rule), drawn as a ring and a dashed row */
+.chip.lt i{border-radius:50%;background:none;border:1.5px solid currentColor}
+.chip.lt{color:var(--gold)}
+.apair.soft{border-style:dashed;background:rgba(255,255,255,.025)}
+.apair.sev-lt .st::before{border-radius:50%;background:none;border:1.5px solid currentColor;box-sizing:border-box}
+.apair.sev-lt .st{color:var(--gold)}
+.ct-repair-left{margin-top:10px;color:var(--gold)}
+#ctool .ct-check-ok{display:flex;white-space:normal;line-height:1.5;border-radius:18px}
+
+/* second cue and the small demo chart (the story's palette studio has the same) */
+#ctool .ct-cell{position:relative;overflow:hidden}
+.ct-pat{position:absolute;inset:0;pointer-events:none;border-radius:inherit}
+#ctool.fix-on .apair .asw.b::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(0,0,0,.6) 0 3px,transparent 3px 8px)}
+.ct-demo{margin-top:22px;padding:16px 18px 12px;border-radius:18px;border:1px solid var(--glass-b);background:var(--glass)}
+.ct-demo-bar{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between}
+.audit-fix.ct-fix{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--paper);cursor:pointer;margin:0}
+.audit-fix.ct-fix input{width:18px;height:18px;accent-color:var(--gold)}
+.ct-eyes{display:flex;flex-wrap:wrap;gap:6px}
+.ct-eyes .wchip{padding:6px 12px;font-size:12.5px}
+.ct-demo-cap{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin:14px 0 8px}
+#ctDemo{display:block;width:100%;height:auto;background:#0c0c10;border-radius:14px}
+#ctDemo text{font-family:var(--sans);fill:var(--dim);font-size:12px}
+#ctDemo .val{fill:var(--paper);font-weight:700;font-size:15px}
+.ct-demo .mono-note{margin-top:10px}
+
+/* palette table on the left, results on the right, so nothing needs scrolling to be seen together */
+:root{--measure:min(1240px,100%)}
+.ct-cols{display:grid;grid-template-columns:minmax(0,1.04fr) minmax(0,1fr);gap:30px;align-items:start}
+.ct-left{min-width:0}
+.ct-right{min-width:0}
+#ctool .ct-head{margin-top:6px}
+#ctool .ct-check{margin-top:0}
+.ct-found{margin-top:0}
+#ctool .ct-actions,#ctool .ct-presets{justify-content:flex-start}
+@media(min-width:1000px){
+  .ct-right{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;padding-right:6px;scrollbar-width:thin}
+}
+@media(max-width:999px){
+  .ct-cols{grid-template-columns:1fr;gap:6px}
+  #ctool .ct-check{margin-top:24px}
+}
+
 @media(max-width:600px){.apair{grid-template-columns:1fr}.panel{padding:20px}}

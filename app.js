@@ -93,16 +93,18 @@
     listEl.innerHTML = '';
     shownCues = {};
 
+    var soft = softOf(result);
     if (!result.findings.length) {
-      statusEl.innerHTML = TTEUI.summaryHtml(0);
+      statusEl.innerHTML = TTEUI.summaryHtml(0, 0, soft.length);
       statusEl.className = 'an-status is-clean';
+      addSoft(soft);
       addCaveat();
       return;
     }
 
     statusEl.className = 'an-status is-warn';
     var nHigh = result.findings.filter(function (f) { return f.severity === 'high'; }).length;
-    statusEl.innerHTML = TTEUI.summaryHtml(result.findings.length, nHigh);
+    statusEl.innerHTML = TTEUI.summaryHtml(result.findings.length, nHigh, soft.length);
 
     /* 颜色本身是不是超载了？这跟色觉障碍无关，是更上游的问题：
        类别多到一定程度，谁都记不住颜色对应哪一类。放在最前面，
@@ -119,6 +121,7 @@
     result.findings.forEach(function (f, i) {
       listEl.appendChild(findingRow(f, i + 1));
     });
+    addSoft(soft);
 
     addRepair(state);
     addExportButton(state);
@@ -156,14 +159,46 @@
     return out;
   }
 
-  function addRepair(state) {
-    var res = state.result, cols = res.colours, inF = {};
-    res.findings.forEach(function (f) { inF[f.hexA] = 1; inF[f.hexB] = 1; });
-    var idx = [];
-    cols.forEach(function (c, i) {
+  /* the heads-up tier: pairs that only lightness keeps apart (outside the audited rule), at most three, same definition as the story */
+  function softOf(result) {
+    var cs = result.colours.filter(function (c) {
       var l = CVD.rgb2lab(c.rgb[0], c.rgb[1], c.rgb[2]);
-      if (inF[c.hex] || Math.sqrt(l[1] * l[1] + l[2] * l[2]) > 18) idx.push(i);
+      return Math.sqrt(l[1] * l[1] + l[2] * l[2]) > 18 && c.share >= 0.0006;
     });
+    var hard = {}; result.findings.forEach(function (f) { hard[[f.hexA, f.hexB].sort().join('|')] = 1; });
+    return REP.softPairs(cs.map(function (c) { return c.rgb; }))
+      .filter(function (q) { return !hard[[cs[q.i].hex, cs[q.j].hex].sort().join('|')]; })
+      .sort(function (a, b) { return a.light - b.light; }).slice(0, 3)
+      .map(function (q) { return { a: cs[q.i].hex, b: cs[q.j].hex, types: q.types }; });
+  }
+  function addSoft(soft) {
+    if (!soft.length) return;
+    var h = document.createElement('div'); h.className = 'ct-check-subhead'; h.textContent = t('ct.soft.head'); listEl.appendChild(h);
+    var ul = document.createElement('ul'); ul.className = 'ct-pairs';
+    ul.innerHTML = soft.map(function (q) { return TTEUI.pairRow({ a: q.a, b: q.b, i: null, j: null, severity: 'soft', types: q.types }); }).join('');
+    listEl.appendChild(ul);
+  }
+
+  /* a colour pushed through the same sequence of recolourings as the pixels */
+  function mapColour(c, maps) {
+    var cur = c;
+    maps.forEach(function (m) {
+      var pl = CVD.rgb2lab(cur[0], cur[1], cur[2]), bi = -1, bd = 1e9;
+      m.from.forEach(function (f, i) { var d = CVD.deltaE(pl, CVD.rgb2lab(f[0], f[1], f[2])); if (d < bd) { bd = d; bi = i; } });
+      if (bi < 0 || bd > 6) return;
+      var fl = CVD.rgb2lab(m.from[bi][0], m.from[bi][1], m.from[bi][2]), tl = CVD.rgb2lab(m.to[bi][0], m.to[bi][1], m.to[bi][2]);
+      if (CVD.deltaE(fl, tl) <= 0.5) return;
+      cur = r8(CVD.lab2rgb(pl[0] + tl[0] - fl[0], pl[1] + tl[1] - fl[1], pl[2] + tl[2] - fl[2]));
+    });
+    return cur;
+  }
+  function applyMaps(img, w, h, maps) {
+    var cur = img;
+    maps.forEach(function (m) { cur = recolour(cur, w, h, m.from, m.to); });
+    return cur;
+  }
+
+  function addRepair(state) {
     var head = '<div class="ct-repair-k">' + TTEUI.esc(t('ct.repair.title')) + '</div>';
     var box = document.createElement('div');
     box.className = 'ct-repair an-repair';
@@ -172,24 +207,45 @@
 
     setTimeout(function () {
       if (!document.body.contains(box)) return;
-      var rep = REP.repair(idx.map(function (i) { return cols[i].rgb; }));
-      if (rep.stage <= 0 || rep.remaining > 0) {
-        box.innerHTML = head + '<p class="ct-repair-p">' + TTEUI.esc(t('an.repair.none')) + '</p>';
-        return;
+      /* repair, recolour, check again with the same checker; if a colour that had been merged with a neighbour shows up and clashes,
+         go round again (at most three passes, and a pass may never make things worse) */
+      var curImg = state.imageData, curRes = state.result, final = null, maxStage = 0, firstIdx = null, firstCols = null, round;
+      for (round = 1; round <= 3; round++) {
+        var cols = curRes.colours, inF = {}, idx = [];
+        curRes.findings.forEach(function (f) { inF[f.hexA] = 1; inF[f.hexB] = 1; });
+        cols.forEach(function (c, i) {
+          var l = CVD.rgb2lab(c.rgb[0], c.rgb[1], c.rgb[2]);
+          if (inF[c.hex] || Math.sqrt(l[1] * l[1] + l[2] * l[2]) > 18) idx.push(i);
+        });
+        var rep = REP.repair(idx.map(function (i) { return cols[i].rgb; }));
+        if (rep.stage <= 0 || rep.remaining > 0) break;
+        if (round === 1) { firstIdx = idx; firstCols = cols.map(function (c) { return c.rgb; }); }
+        maxStage = Math.max(maxStage, rep.stage);
+        var from = cols.map(function (c) { return c.rgb; });
+        var to = from.map(function (c) { return c.slice(); });
+        idx.forEach(function (ci, k) { to[ci] = r8(rep.colours[k]); });
+        var rimg = recolour(curImg, state.w, state.h, from, to);
+        var rr = CVDAnalyse.run(rimg, state.w, state.h, []);
+        var cand = { img: rimg, res: rr, n: rr.findings.length, soft: softOf(rr).length, maps: (final ? final.maps : []).concat([{ from: from, to: to }]), rounds: round };
+        if (final && cand.n > final.n) break;
+        final = cand; curImg = rimg; curRes = rr;
+        if (cand.n === 0) break;
       }
-      var from = cols.map(function (c) { return c.rgb; });
-      var to = cols.map(function (c) { return c.rgb.slice(); });
-      idx.forEach(function (ci, k) { to[ci] = r8(rep.colours[k]); });
-      var rimg = recolour(state.imageData, state.w, state.h, from, to);
-      var again = CVDAnalyse.run(rimg, state.w, state.h, []).findings.length;
-      state.repaired = { img: rimg, from: from, to: to };
+      if (!final) { box.innerHTML = head + '<p class="ct-repair-p">' + TTEUI.esc(t('an.repair.none')) + '</p>'; return; }
+      state.repaired = { img: final.img, maps: final.maps };
 
-      var how = t('ct.repair.how' + (rep.stage >= 1 && rep.stage <= 3 ? rep.stage : 1));
-      var check = again === 0 ? t('an.repair.check0') : fill(t('an.repair.check'), { k: again === 1 ? '1 pair' : again + ' pairs' });
-      var h = head + '<p class="ct-repair-p">' + TTEUI.esc(fill(t('an.repair.p'), { n: rep.moved.length, m: idx.length, how: how, check: check })) + '</p><div class="ct-repair-sw">';
-      rep.moved.forEach(function (k) {
-        var o = cols[idx[k]].hex, n = CVDAnalyse.rgb2hex(r8(rep.colours[k]));
-        h += '<span class="ct-chg"><i style="background:' + o + '"></i><em aria-hidden="true">\u2192</em><i style="background:' + n + '"></i><span class="ct-chg-hex">' + o + ' \u2192 ' + n + '</span></span>';
+      var how = t('ct.repair.how' + (maxStage >= 1 && maxStage <= 3 ? maxStage : 1));
+      var check = final.n === 0 ? (final.soft ? fill(t('an.repair.check0soft'), { n: final.soft }) : t('an.repair.check0'))
+                                : fill(t('an.repair.check'), { k: final.n === 1 ? '1 pair' : final.n + ' pairs' });
+      var net = [];
+      firstIdx.forEach(function (ci) {
+        var o = firstCols[ci], n = mapColour(o, final.maps);
+        if (CVD.deltaE(CVD.rgb2lab(o[0], o[1], o[2]), CVD.rgb2lab(n[0], n[1], n[2])) > 0.5) net.push([CVDAnalyse.rgb2hex(r8(o)), CVDAnalyse.rgb2hex(n)]);
+      });
+      var h = head + '<p class="ct-repair-p">' + TTEUI.esc(fill(t('an.repair.p'), { n: net.length, m: firstIdx.length, how: how, check: check })) +
+        (final.rounds > 1 ? ' ' + TTEUI.esc(fill(t('an.repair.rounds'), { r: final.rounds })) : '') + '</p><div class="ct-repair-sw">';
+      net.forEach(function (pr) {
+        h += '<span class="ct-chg"><i style="background:' + pr[0] + '"></i><em aria-hidden="true">\u2192</em><i style="background:' + pr[1] + '"></i><span class="ct-chg-hex">' + pr[0] + ' \u2192 ' + pr[1] + '</span></span>';
       });
       h += '</div><div class="ct-toggle" role="group" aria-label="' + TTEUI.esc(t('ct.repair.title')) + '">' +
         '<button type="button" class="wchip" data-show="orig" aria-pressed="true">' + TTEUI.esc(t('an.repair.orig')) + '</button>' +
@@ -215,7 +271,7 @@
   function downloadRepaired(state, W, H) {
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var x = c.getContext('2d'); x.drawImage(state.source, 0, 0, W, H);
-    x.putImageData(recolour(x.getImageData(0, 0, W, H), W, H, state.repaired.from, state.repaired.to), 0, 0);
+    x.putImageData(applyMaps(x.getImageData(0, 0, W, H), W, H, state.repaired.maps), 0, 0);
     c.toBlob(function (blob) {
       var url = URL.createObjectURL(blob), a = document.createElement('a');
       a.href = url; a.download = 'cvd-repaired.png';

@@ -98,7 +98,19 @@ var I18N = {
     "an.repair.orig": "Original",
     "an.repair.rep": "Repaired",
     "an.repair.dl": "Download repaired image ({w}×{h})",
-    "an.repair.none": "No small change clears every pair. This chart needs a second cue: direct labels, patterns or marker shapes."
+    "an.repair.none": "No small change clears every pair. This chart needs a second cue: direct labels, patterns or marker shapes.",
+    "an.repair.rounds": "It took {r} passes: recolouring can reveal a colour that had been hidden behind a neighbour.",
+    "ct.fix": "Add a second cue (a pattern on every colour)",
+    "ct.eye.normal": "Typical vision",
+    "ct.demo.cap": "Chart shown through: {eye}",
+    "ct.demo.alt": "A bar chart drawn with your palette, shown through the selected type of colour vision",
+    "ct.demo.hint": "Pick a type of colour vision to see a chart drawn with these colours the way that type sees it. With the pattern on, the bars stay readable even when two colours merge.",
+    "chip.lt": "{n} kept apart by lightness alone",
+    "sum.t.outright": "No colour pair loses its difference outright",
+    "pair.soft": "Hue merges for {types}; only lightness separates them",
+    "ct.soft.head": "Only lightness keeps these apart",
+    "ct.repair.softleft": "{n} pair(s) are still kept apart by lightness alone, so those need a second cue (a label, a pattern or a marker shape).",
+    "an.repair.check0soft": "Checked again on the repaired image: the checker finds no pair that loses its difference; {n} pair(s) are still kept apart by lightness alone."
   }
 };
 

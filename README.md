@@ -12,12 +12,9 @@ The story has a guided version of this tool (four short acts: see, fix, add a cu
 
 **Chart checker.** Upload a chart, slide or screenshot. The tool finds the main colours used for categories, shows which two colours lose their difference for which type of colour vision, where on the image they meet, and offers a repair for the whole set of colours. You can flip between the original and the repaired chart, and download the repaired image. When no small change works it says so and points to a second cue (labels, dashes, markers).
 
-**Repair.** `repair.js` changes the colours that sit in a flagged pair *together*, so that no pair is flagged by the rule below and no two colours end up too close in typical vision. It tries lightness alone first, then lightness and saturation, then a little hue. This replaces the earlier one-pair-at-a-time suggestion, which on 120 test charts created a new clash in 43% of cases. On the 51 flagged test charts, recolouring the image and running the same checker again left no flagged pair in 45 (88%), against 20 (39%) for the old suggestions. That is the checker grading its own repair; it has not been tested with people who have colour-vision deficiency, and lightness-only changes can fight a chart's meaning (for example a sequential scale). These numbers are exploratory.
+**Repair.** `repair.js` changes the colours that sit in a flagged pair *together*, not one pair at a time (the old one-pair suggestion created a new clash in 43% of cases on 120 test charts). It tries lightness alone first, then lightness and saturation, then a little hue, and it will not "fix" a pair by pulling it under the rule's hue gate (the first version did, and made a pair worse; that is closed). It also avoids leaving pairs that only lightness keeps apart. On the chart checker it recolours the image, checks it again with the same checker, and goes round again if a hidden colour shows up (up to three passes). On the 51 flagged test charts that left no flagged pair in all 51 (the old suggestions: 20), and no pair kept apart by lightness alone in 46 (the old suggestions: 5). That is the checker grading its own repair, with margins set after seeing an earlier version fail; it has not been tested with people who have colour-vision deficiency. A crowded palette (Tableau 10, Okabe–Ito) needs large changes, and repair by lightness or hue can fight a chart's meaning, for example a sequential scale. These numbers are exploratory.
 
-Each flagged pair is graded:
-
-- **nearly identical**: the simulated colour difference is under 13
-- **harder to tell apart**: the difference is reduced, but some lightness contrast remains
+**Heads-up tier.** Pairs whose hue collapses for some type but that a lightness gap of 18 to 32 still separates are listed separately as "kept apart by lightness alone". They are outside the audited rule, which is unchanged.
 
 ## The rule
 
