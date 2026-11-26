@@ -7,7 +7,7 @@
 <meta name="description" content="Check a palette or a finished chart for colour-vision deficiency: see it through three kinds of colour vision, find the colour pairs that lose their difference, and get a fix. Everything runs in your browser.">
 <!-- 字体自托管，中文走系统栈：Google Fonts 在中国大陆不可达 -->
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="prism.css?v=5">
+<link rel="stylesheet" href="prism.css?v=6">
 </head>
 <body>
 <canvas id="ambient" aria-hidden="true"></canvas>
@@ -33,6 +33,17 @@
   <section class="panel ct-main">
    <div class="ct-cols">
    <div class="ct-left">
+    <div class="ct-presets">
+      <span class="ct-presets-lbl" data-i="ct.presets"></span>
+      <button class="ct-preset" data-ref="Okabe–Ito" data-pal="#E69F00,#56B4E9,#009E73,#F0E442,#0072B2,#D55E00,#CC79A7">Okabe–Ito</button>
+      <button class="ct-preset" data-ref="Tol" data-pal="#4477AA,#EE6677,#228833,#CCBB44,#66CCEE,#AA3377">Tol bright</button>
+      <button class="ct-preset" data-ref="IBM" data-pal="#648FFF,#785EF0,#DC267F,#FE6100,#FFB000">IBM</button>
+      <button class="ct-preset" data-pal="#4E79A7,#F28E2B,#E15759,#76B7B2,#59A14F,#EDC948,#B07AA1,#FF9DA7,#9C755F,#BAB0AC">Tableau 10</button>
+      <button class="ct-preset" data-pal="#E41A1C,#377EB8,#4DAF4A,#984EA3,#FF7F00,#A65628,#F781BF">ColorBrewer Set1</button>
+      <button class="ct-preset" data-pal="#D72D2D,#3CA03C,#3366CC,#F4B400">Red / green (demo)</button>
+    </div>
+    <p class="mono-note ct-subset" data-i="ct.presets.subset"></p>
+
     <div class="ct-head">
       <span class="ct-col-lbl ct-true" data-i="ct.true"></span>
       <span class="ct-col-lbl" data-i="ct.protan"></span>
@@ -44,6 +55,13 @@
     <div class="ct-demo">
       <div class="ct-demo-bar">
         <label class="audit-fix ct-fix"><input type="checkbox" id="ctFix"><span data-i="ct.fix"></span></label>
+        <div class="ct-eyes ct-kinds" role="group" aria-label="Type of chart">
+          <button type="button" class="wchip" data-demo-chart="bars" aria-pressed="true" data-i="ct.chart.bars"></button>
+          <button type="button" class="wchip" data-demo-chart="lines" aria-pressed="false" data-i="ct.chart.lines"></button>
+          <button type="button" class="wchip" data-demo-chart="pie" aria-pressed="false" data-i="ct.chart.pie"></button>
+        </div>
+      </div>
+      <div class="ct-demo-bar ct-demo-eyes">
         <div class="ct-eyes" role="group" aria-label="Type of colour vision shown in the chart">
           <button type="button" class="wchip" data-demo-eye="normal" aria-pressed="true" data-i="ct.eye.normal"></button>
           <button type="button" class="wchip" data-demo-eye="protan" aria-pressed="false" data-i="ct.protan"></button>
@@ -59,16 +77,6 @@
       <button class="btn ghost" id="ctAdd" data-i="ct.add"></button>
       <button class="btn ghost" id="ctReset" data-i="ct.reset"></button>
       <button class="btn ghost" id="ctExport" data-i="ct.export"></button>
-    </div>
-
-    <div class="ct-presets">
-      <span class="ct-presets-lbl" data-i="ct.presets"></span>
-      <button class="ct-preset" data-ref="Okabe–Ito" data-pal="#E69F00,#56B4E9,#009E73,#F0E442,#0072B2,#D55E00,#CC79A7">Okabe–Ito</button>
-      <button class="ct-preset" data-ref="Tol" data-pal="#4477AA,#EE6677,#228833,#CCBB44,#66CCEE,#AA3377">Tol bright</button>
-      <button class="ct-preset" data-ref="IBM" data-pal="#648FFF,#785EF0,#DC267F,#FE6100,#FFB000">IBM</button>
-      <button class="ct-preset" data-pal="#4E79A7,#F28E2B,#E15759,#76B7B2,#59A14F,#EDC948,#B07AA1,#FF9DA7,#9C755F,#BAB0AC">Tableau 10</button>
-      <button class="ct-preset" data-pal="#E41A1C,#377EB8,#4DAF4A,#984EA3,#FF7F00,#A65628,#F781BF">ColorBrewer Set1</button>
-      <button class="ct-preset" data-pal="#D72D2D,#3CA03C,#3366CC,#F4B400">Red / green</button>
     </div>
 
     <p class="mono-note" data-i="ct.presets.note"></p>
@@ -123,13 +131,13 @@
 </main>
 
 <script src="ambient.js" defer></script>
-<script src="i18n.js?v=6"></script>
+<script src="i18n.js?v=7"></script>
 <script src="cvd.js"></script>
 <script src="analyse.js"></script>
 <script src="pairs.js?v=2"></script>
 <script src="repair.js?v=3"></script>
 <script src="ui.js?v=2"></script>
-<script src="ctool.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="ctool.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

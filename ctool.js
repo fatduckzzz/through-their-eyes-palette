@@ -158,9 +158,85 @@
       'repeating-linear-gradient(0deg,rgba(0,0,0,.6) 0 3px,transparent 3px 8px)'
     ];
     function patEl(i){ var p=document.createElement('i'); p.className='ct-pat'; p.setAttribute('aria-hidden','true'); p.style.background=PATCSS[i%PATCSS.length]; return p; }
+    var demoChart='bars';
+    var WEIGHTS=[6,9,5,8,4,7,3,6,5,8];
+    var DASH=['','8 4','2 4','11 4 2 4','15 5','1 5'];
+    function colOf(hex){ return demoEye==='normal'?hex:simulate(hex,demoEye); }
+    function mark(i,x,y,col){
+      var s='<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')" fill="'+col+'" stroke="#0c0c10" stroke-width="1.3">';
+      switch(i%6){
+        case 0: s+='<circle r="4.6"/>'; break;
+        case 1: s+='<rect x="-4.2" y="-4.2" width="8.4" height="8.4"/>'; break;
+        case 2: s+='<polygon points="0,-5.4 5,3.8 -5,3.8"/>'; break;
+        case 3: s+='<polygon points="0,-5.6 5.6,0 0,5.6 -5.6,0"/>'; break;
+        case 4: s+='<path d="M-1.8 -5H1.8V-1.8H5V1.8H1.8V5H-1.8V1.8H-5V-1.8H-1.8Z"/>'; break;
+        default: s+='<path d="M-4.6 -2.6L-2.6 -4.6 0 -2 2.6 -4.6 4.6 -2.6 2 0 4.6 2.6 2.6 4.6 0 2 -2.6 4.6 -4.6 2.6 -2 0Z"/>';
+      }
+      return s+'</g>';
+    }
+    function barsSVG(w){
+      var n=palette.length,gw=(w-40)/n,bw=Math.min(46,gw-10),s='';
+      s+='<line x1="20" x2="'+(w-20)+'" y1="150" y2="150" stroke="rgba(255,255,255,.4)"/>';
+      palette.forEach(function(hex,i){
+        var bh=WEIGHTS[i%10]*12,x=20+gw*i+(gw-bw)/2,y=150-bh;
+        s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+colOf(hex)+'"/>';
+        if(fixOn) s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="url(#tp-'+(i%6)+')" opacity=".9"/>';
+        s+='<text x="'+(x+bw/2)+'" y="'+(y-6)+'" text-anchor="middle" class="val">'+WEIGHTS[i%10]+'</text>';
+        s+='<text x="'+(x+bw/2)+'" y="170" text-anchor="middle">'+(i+1)+'</text>';
+      });
+      return s;
+    }
+    /* lines: colour and a legend always; with the second cue on, each line also gets its own dash, its own marker and a number at its end */
+    function linesSVG(w){
+      var n=palette.length,L=34,R=fixOn?38:16,T=12,B=148,pw=w-L-R,pts=6,s='',ends=[];
+      for(var g=0;g<=3;g++){ var gy=B-(B-T)*g/3; s+='<line x1="'+L+'" x2="'+(w-R)+'" y1="'+gy+'" y2="'+gy+'" stroke="rgba(255,255,255,'+(g?'.08':'.4')+')"/>'; }
+      palette.forEach(function(hex,i){
+        var col=colOf(hex),d='',last=null;
+        for(var j=0;j<pts;j++){
+          var v=Math.max(10,Math.min(92,44+30*Math.sin(i*1.7+j*0.85+0.4)+(j-2.5)*(i%3-1)*4)),x=L+pw*j/(pts-1),y=B-(B-T)*v/100;
+          d+=(j?'L':'M')+x.toFixed(1)+' '+y.toFixed(1); last=[x,y];
+        }
+        s+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"'+(fixOn&&DASH[i%6]?' stroke-dasharray="'+DASH[i%6]+'"':'')+'/>';
+        if(fixOn){
+          for(var k=0;k<pts;k+=1){ var vv=Math.max(10,Math.min(92,44+30*Math.sin(i*1.7+k*0.85+0.4)+(k-2.5)*(i%3-1)*4)); s+=mark(i,L+pw*k/(pts-1),B-(B-T)*vv/100,col); }
+          ends.push({i:i,y:last[1]});
+        }
+      });
+      if(fixOn){   /* number at the end of each line, pushed apart so they do not overlap */
+        ends.sort(function(p,q){return p.y-q.y;});
+        for(var e=1;e<ends.length;e++) if(ends[e].y-ends[e-1].y<11) ends[e].y=ends[e-1].y+11;
+        ends.forEach(function(p){ s+='<text x="'+(w-R+8)+'" y="'+(p.y+4)+'" class="val" style="font-size:12px;text-anchor:start">'+(p.i+1)+'</text>'; });
+      }
+      palette.forEach(function(hex,i){   /* legend: the part colour has to carry on its own */
+        var lx=L+i*46; s+='<rect x="'+lx+'" y="165" width="12" height="12" rx="3" fill="'+colOf(hex)+'"/><text x="'+(lx+17)+'" y="175">'+(i+1)+'</text>';
+      });
+      return s;
+    }
+    function pieSVG(w){
+      var n=palette.length,cx=150,cy=92,r=78,total=0,a0=-Math.PI/2,s='',i;
+      for(i=0;i<n;i++) total+=WEIGHTS[i%10];
+      palette.forEach(function(hex,i){
+        var a1=a0+2*Math.PI*WEIGHTS[i%10]/total,x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1),big=(a1-a0>Math.PI)?1:0;
+        var d='M'+cx+' '+cy+'L'+x0.toFixed(1)+' '+y0.toFixed(1)+'A'+r+' '+r+' 0 '+big+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+'Z';
+        s+='<path d="'+d+'" fill="'+colOf(hex)+'" stroke="#0c0c10" stroke-width="1.6"/>';
+        if(fixOn){
+          s+='<path d="'+d+'" fill="url(#tp-'+(i%6)+')" opacity=".9" stroke="#0c0c10" stroke-width="1.6"/>';
+          var am=(a0+a1)/2; s+='<text x="'+(cx+r*0.64*Math.cos(am)).toFixed(1)+'" y="'+(cy+r*0.64*Math.sin(am)+5).toFixed(1)+'" text-anchor="middle" class="val" style="paint-order:stroke;stroke:#0c0c10;stroke-width:3px">'+(i+1)+'</text>';
+        }
+        a0=a1;
+      });
+      var lx=290,rowH=Math.min(17,160/n),ly=Math.max(10,95-rowH*n/2);   /* legend: the part colour has to carry on its own */
+      palette.forEach(function(hex,i){
+        var y=ly+i*rowH;
+        s+='<rect x="'+lx+'" y="'+y+'" width="14" height="'+(rowH-4)+'" rx="3" fill="'+colOf(hex)+'"/>';
+        if(fixOn) s+='<rect x="'+lx+'" y="'+y+'" width="14" height="'+(rowH-4)+'" rx="3" fill="url(#tp-'+(i%6)+')" opacity=".9"/>';
+        s+='<text x="'+(lx+22)+'" y="'+(y+rowH-6)+'">'+(i+1)+' \u00b7 '+WEIGHTS[i%10]+'</text>';
+      });
+      return s;
+    }
     function drawDemo(){
       var svg=document.getElementById('ctDemo'); if(!svg) return;
-      var w=560,h=190,n=palette.length,gw=(w-40)/n,bw=Math.min(46,gw-10),vals=[6,9,5,8,4,7,3,6,5,8],s='';
+      var w=560,h=190,s='';
       s+='<defs>'+
         '<pattern id="tp-0" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#0c0c10" stroke-width="3"/></pattern>'+
         '<pattern id="tp-1" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="4.5" cy="4.5" r="2" fill="#0c0c10"/></pattern>'+
@@ -168,14 +244,7 @@
         '<pattern id="tp-3" width="8" height="8" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" stroke="#0c0c10" stroke-width="3"/></pattern>'+
         '<pattern id="tp-4" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#0c0c10" stroke-width="3"/></pattern>'+
         '<pattern id="tp-5" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="0" y1="3.5" x2="7" y2="3.5" stroke="#0c0c10" stroke-width="2.6"/></pattern></defs>';
-      s+='<line x1="20" x2="'+(w-20)+'" y1="150" y2="150" stroke="rgba(255,255,255,.4)"/>';
-      palette.forEach(function(hex,i){
-        var bh=vals[i%vals.length]*12,x=20+gw*i+(gw-bw)/2,y=150-bh,col=demoEye==='normal'?hex:simulate(hex,demoEye);
-        s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+col+'"/>';
-        if(fixOn) s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="url(#tp-'+(i%6)+')" opacity=".9"/>';
-        s+='<text x="'+(x+bw/2)+'" y="'+(y-6)+'" text-anchor="middle" class="val">'+vals[i%vals.length]+'</text>';
-        s+='<text x="'+(x+bw/2)+'" y="170" text-anchor="middle">'+(i+1)+'</text>';
-      });
+      s+=demoChart==='lines'?linesSVG(w):demoChart==='pie'?pieSVG(w):barsSVG(w);
       svg.setAttribute('viewBox','0 0 '+w+' '+h); svg.setAttribute('aria-label',t('ct.demo.alt')); svg.innerHTML=s;
       var cap=document.getElementById('ctDemoCap');
       if(cap) cap.textContent=fill(t('ct.demo.cap'),{eye:t(demoEye==='normal'?'ct.eye.normal':'ct.'+demoEye)});
@@ -183,6 +252,13 @@
     (function(){
       var cb=document.getElementById('ctFix');
       if(cb) cb.addEventListener('change',function(){ fixOn=cb.checked; render(); });
+      document.querySelectorAll('[data-demo-chart]').forEach(function(b){
+        b.addEventListener('click',function(){
+          demoChart=b.getAttribute('data-demo-chart');
+          document.querySelectorAll('[data-demo-chart]').forEach(function(x){ x.setAttribute('aria-pressed',String(x===b)); });
+          drawDemo();
+        });
+      });
       document.querySelectorAll('[data-demo-eye]').forEach(function(b){
         b.addEventListener('click',function(){
           demoEye=b.getAttribute('data-demo-eye');

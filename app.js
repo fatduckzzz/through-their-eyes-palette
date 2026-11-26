@@ -136,29 +136,6 @@
   var REP = TTERepair.make(CVD, CVDAnalyse.CONFIG);
   function r8(c) { return [Math.max(0, Math.min(255, Math.round(c[0]))), Math.max(0, Math.min(255, Math.round(c[1]))), Math.max(0, Math.min(255, Math.round(c[2])))]; }
 
-  /* every pixel within dE 6 of a moved colour (and nearest to it) gets the same Lab shift as that colour */
-  function recolour(src, w, h, from, to) {
-    var labs = from.map(function (c) { return CVD.rgb2lab(c[0], c[1], c[2]); });
-    var moved = [], dl = [], i;
-    for (i = 0; i < from.length; i++) {
-      var nl = CVD.rgb2lab(to[i][0], to[i][1], to[i][2]);
-      moved[i] = CVD.deltaE(labs[i], nl) > 0.5;
-      dl[i] = [nl[0] - labs[i][0], nl[1] - labs[i][1], nl[2] - labs[i][2]];
-    }
-    var out = new ImageData(new Uint8ClampedArray(src.data), w, h), d = out.data, cache = {};
-    for (var p = 0; p < d.length; p += 4) {
-      var r = d[p], g = d[p + 1], b = d[p + 2], key = (r << 16) | (g << 8) | b, res = cache[key];
-      if (res === undefined) {
-        var pl = CVD.rgb2lab(r, g, b), bi = -1, bd = 1e9;
-        for (i = 0; i < labs.length; i++) { var dd = CVD.deltaE(pl, labs[i]); if (dd < bd) { bd = dd; bi = i; } }
-        if (bi >= 0 && moved[bi] && bd <= 6) res = r8(CVD.lab2rgb(pl[0] + dl[bi][0], pl[1] + dl[bi][1], pl[2] + dl[bi][2])); else res = null;
-        cache[key] = res;
-      }
-      if (res) { d[p] = res[0]; d[p + 1] = res[1]; d[p + 2] = res[2]; }
-    }
-    return out;
-  }
-
   /* the heads-up tier: pairs that only lightness keeps apart (outside the audited rule), at most three, same definition as the story */
   function softOf(result) {
     var cs = result.colours.filter(function (c) {
@@ -179,25 +156,6 @@
     listEl.appendChild(ul);
   }
 
-  /* a colour pushed through the same sequence of recolourings as the pixels */
-  function mapColour(c, maps) {
-    var cur = c;
-    maps.forEach(function (m) {
-      var pl = CVD.rgb2lab(cur[0], cur[1], cur[2]), bi = -1, bd = 1e9;
-      m.from.forEach(function (f, i) { var d = CVD.deltaE(pl, CVD.rgb2lab(f[0], f[1], f[2])); if (d < bd) { bd = d; bi = i; } });
-      if (bi < 0 || bd > 6) return;
-      var fl = CVD.rgb2lab(m.from[bi][0], m.from[bi][1], m.from[bi][2]), tl = CVD.rgb2lab(m.to[bi][0], m.to[bi][1], m.to[bi][2]);
-      if (CVD.deltaE(fl, tl) <= 0.5) return;
-      cur = r8(CVD.lab2rgb(pl[0] + tl[0] - fl[0], pl[1] + tl[1] - fl[1], pl[2] + tl[2] - fl[2]));
-    });
-    return cur;
-  }
-  function applyMaps(img, w, h, maps) {
-    var cur = img;
-    maps.forEach(function (m) { cur = recolour(cur, w, h, m.from, m.to); });
-    return cur;
-  }
-
   function addRepair(state) {
     var head = '<div class="ct-repair-k">' + TTEUI.esc(t('ct.repair.title')) + '</div>';
     var box = document.createElement('div');
@@ -207,77 +165,37 @@
 
     setTimeout(function () {
       if (!document.body.contains(box)) return;
-      /* repair, recolour, check again with the same checker; if a colour that had been merged with a neighbour shows up and clashes,
-         go round again (at most three passes, and a pass may never make things worse) */
-      var curImg = state.imageData, curRes = state.result, final = null, maxStage = 0, firstIdx = null, firstCols = null, round;
-      for (round = 1; round <= 3; round++) {
-        var cols = curRes.colours, inF = {}, idx = [];
-        curRes.findings.forEach(function (f) { inF[f.hexA] = 1; inF[f.hexB] = 1; });
-        cols.forEach(function (c, i) {
-          var l = CVD.rgb2lab(c.rgb[0], c.rgb[1], c.rgb[2]);
-          if (inF[c.hex] || Math.sqrt(l[1] * l[1] + l[2] * l[2]) > 18) idx.push(i);
-        });
-        var rep = REP.repair(idx.map(function (i) { return cols[i].rgb; }));
-        if (rep.stage <= 0 || rep.remaining > 0) break;
-        if (round === 1) { firstIdx = idx; firstCols = cols.map(function (c) { return c.rgb; }); }
-        maxStage = Math.max(maxStage, rep.stage);
-        var from = cols.map(function (c) { return c.rgb; });
-        var to = from.map(function (c) { return c.slice(); });
-        idx.forEach(function (ci, k) { to[ci] = r8(rep.colours[k]); });
-        var rimg = recolour(curImg, state.w, state.h, from, to);
-        var rr = CVDAnalyse.run(rimg, state.w, state.h, []);
-        var cand = { img: rimg, res: rr, n: rr.findings.length, soft: softOf(rr).length, maps: (final ? final.maps : []).concat([{ from: from, to: to }]), rounds: round };
-        if (final && cand.n > final.n) break;
-        final = cand; curImg = rimg; curRes = rr;
-        if (cand.n === 0) break;
+      var cols = state.result.colours, inF = {}, idx = [];
+      state.result.findings.forEach(function (f) { inF[f.hexA] = 1; inF[f.hexB] = 1; });
+      cols.forEach(function (c, i) {
+        var l = CVD.rgb2lab(c.rgb[0], c.rgb[1], c.rgb[2]);
+        if (inF[c.hex] || Math.sqrt(l[1] * l[1] + l[2] * l[2]) > 18) idx.push(i);
+      });
+      var rep = REP.repair(idx.map(function (i) { return cols[i].rgb; }));
+      if (rep.stage <= 0 || rep.remaining > 0) {
+        box.innerHTML = head + '<p class="ct-repair-p">' + TTEUI.esc(t('an.repair.none')) + '</p>';
+        return;
       }
-      if (!final) { box.innerHTML = head + '<p class="ct-repair-p">' + TTEUI.esc(t('an.repair.none')) + '</p>'; return; }
-      state.repaired = { img: final.img, maps: final.maps };
-
-      var how = t('ct.repair.how' + (maxStage >= 1 && maxStage <= 3 ? maxStage : 1));
-      var check = final.n === 0 ? (final.soft ? fill(t('an.repair.check0soft'), { n: final.soft }) : t('an.repair.check0'))
-                                : fill(t('an.repair.check'), { k: final.n === 1 ? '1 pair' : final.n + ' pairs' });
-      var net = [];
-      firstIdx.forEach(function (ci) {
-        var o = firstCols[ci], n = mapColour(o, final.maps);
-        if (CVD.deltaE(CVD.rgb2lab(o[0], o[1], o[2]), CVD.rgb2lab(n[0], n[1], n[2])) > 0.5) net.push([CVDAnalyse.rgb2hex(r8(o)), CVDAnalyse.rgb2hex(n)]);
+      var how = t('ct.repair.how' + (rep.stage >= 1 && rep.stage <= 3 ? rep.stage : 1)), list = [];
+      var h = head + '<p class="ct-repair-p">' + TTEUI.esc(fill(t('ct.repair.p'), { n: rep.moved.length, m: idx.length, how: how })) + '</p><div class="ct-repair-sw">';
+      rep.moved.forEach(function (k) {
+        var o = cols[idx[k]].hex, n = CVDAnalyse.rgb2hex(r8(rep.colours[k]));
+        list.push(o + ' -> ' + n);
+        h += '<span class="ct-chg"><i style="background:' + o + '"></i><em aria-hidden="true">\u2192</em><i style="background:' + n + '"></i><span class="ct-chg-hex">' + o + ' \u2192 ' + n + '</span></span>';
       });
-      var h = head + '<p class="ct-repair-p">' + TTEUI.esc(fill(t('an.repair.p'), { n: net.length, m: firstIdx.length, how: how, check: check })) +
-        (final.rounds > 1 ? ' ' + TTEUI.esc(fill(t('an.repair.rounds'), { r: final.rounds })) : '') + '</p><div class="ct-repair-sw">';
-      net.forEach(function (pr) {
-        h += '<span class="ct-chg"><i style="background:' + pr[0] + '"></i><em aria-hidden="true">\u2192</em><i style="background:' + pr[1] + '"></i><span class="ct-chg-hex">' + pr[0] + ' \u2192 ' + pr[1] + '</span></span>';
-      });
-      h += '</div><div class="ct-toggle" role="group" aria-label="' + TTEUI.esc(t('ct.repair.title')) + '">' +
-        '<button type="button" class="wchip" data-show="orig" aria-pressed="true">' + TTEUI.esc(t('an.repair.orig')) + '</button>' +
-        '<button type="button" class="wchip" data-show="rep" aria-pressed="false">' + TTEUI.esc(t('an.repair.rep')) + '</button></div>' +
-        '<button type="button" class="btn ghost ct-dl"></button>' +
+      h += '</div>';
+      if (rep.soft > 0) h += '<p class="ct-repair-p ct-repair-left">' + TTEUI.esc(fill(t('ct.repair.softleft'), { n: rep.soft })) + '</p>';
+      h += '<button type="button" class="btn ghost ct-copy">' + TTEUI.esc(t('ct.repair.copy')) + '</button>' +
+        '<p class="mono-note ct-repair-caveat">' + TTEUI.esc(t('an.repair.note')) + '</p>' +
         '<p class="mono-note ct-repair-caveat">' + TTEUI.esc(t('ct.repair.caveat')) + '</p>';
       box.innerHTML = h;
-
-      var src = state.source, big = src.naturalWidth * src.naturalHeight > 12e6;
-      var W = big ? state.w : src.naturalWidth, H = big ? state.h : src.naturalHeight;
-      box.querySelector('.ct-dl').textContent = fill(t('an.repair.dl'), { w: W, h: H });
-      box.querySelector('.ct-dl').addEventListener('click', function () { downloadRepaired(state, W, H); });
-      box.querySelector('.ct-toggle').addEventListener('click', function (e) {
-        var b = e.target.closest('[data-show]'); if (!b) return;
-        var show = b.getAttribute('data-show'), ctx = canvas.getContext('2d');
-        [].forEach.call(box.querySelectorAll('[data-show]'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-        if (show === 'rep') ctx.putImageData(state.repaired.img, 0, 0);
-        else { ctx.putImageData(state.imageData, 0, 0); drawMarkers(ctx, state.result.findings, 1); }
+      var btn = box.querySelector('.ct-copy'), text = 'Colour changes (old -> new):\n' + list.join('\n');
+      btn.addEventListener('click', function () {
+        function done() { btn.textContent = t('ct.repair.copied'); setTimeout(function () { btn.textContent = t('ct.repair.copy'); }, 2000); }
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {});
+        else { var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta); }
       });
     }, 30);
-  }
-
-  function downloadRepaired(state, W, H) {
-    var c = document.createElement('canvas'); c.width = W; c.height = H;
-    var x = c.getContext('2d'); x.drawImage(state.source, 0, 0, W, H);
-    x.putImageData(applyMaps(x.getImageData(0, 0, W, H), W, H, state.repaired.maps), 0, 0);
-    c.toBlob(function (blob) {
-      var url = URL.createObjectURL(blob), a = document.createElement('a');
-      a.href = url; a.download = 'cvd-repaired.png';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-    }, 'image/png');
   }
 
   /* 把结果拼成一段文字复制走。
